@@ -140,9 +140,8 @@ if __name__ == "__main__":
         loop.close()
 
 #======PING ULTIME ROBOT=====#
-from fastapi import FastAPI
-import threading
 import uvicorn
+from fastapi import FastAPI
 
 app = FastAPI()
 
@@ -150,10 +149,36 @@ app = FastAPI()
 def ping():
     return {"status": "Bot is running"}
 
-def run_ping_server():
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+async def run_fastapi():
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+    server = uvicorn.Server(config)
+    await server.serve()
 
-threading.Thread(target=run_ping_server, daemon=True).start()
+async def main() -> None:
+    await bot.start()
+    bot_user_id, bot_username = bot.me.id, bot.me.username
+
+    await initial_database()
+    await chat_db_init()
+    await cache_db_init()
+    await restart_data_init()
+
+    logger.info(f"@{bot_username} {bot_user_id}")
+
+    # Jalankan FastAPI barengan bot
+    await run_fastapi()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt: Terminating...")
+    except ForceStopLoop as fsl:
+        logger.error(str(fsl))
+    finally:
+        logger.info("Bot: Stopping...")
+        asyncio.run(bot.stop())
 
 #======PING ULTIME ROBOT=====#
 
