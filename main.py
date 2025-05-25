@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from hydrogram import errors
 from hydrogram.helpers import ikb
@@ -15,19 +16,54 @@ from bot import (
     logger,
 )
 
+# =========================
+# HTTP SERVER UNTUK HEALTH CHECK
+# =========================
+class HTTPServer:
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+
+    async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        try:
+            request = await reader.read(1024)
+            if not request:
+                return
+
+            path = request.decode().split(" ")[1]
+            if path == "/":
+                response = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html\r\n\r\n"
+                    "<h1>Bot is running</h1>"
+                )
+            else:
+                response = (
+                    "HTTP/1.1 404 Not Found\r\n"
+                    "Content-Type: text/html\r\n\r\n"
+                    "<h1>404 Not Found</h1>"
+                )
+
+            writer.write(response.encode())
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def run_server(self):
+        server = await asyncio.start_server(self.handle_request, self.host, self.port)
+        logger.info(f"HTTP Server running at http://{self.host}:{self.port}")
+        async with server:
+            await server.serve_forever()
+
+# =========================
+# BOT INITIALIZATION
+# =========================
 
 async def chat_db_init() -> None:
-    """
-    Initializes the chat database by checking the bot's privileges in the configured chat.
-
-    Raises:
-        ForceStopLoop: If the bot does not have the privilege to post messages in the chat.
-    """
     chat_id = config.DATABASE_CHAT_ID
     try:
-        # Get the bot's chat member status
         me = await bot.get_chat_member(chat_id, "me")
-        # Check if the bot has permission to post messages
         if not me.privileges.can_post_messages:
             raise ForceStopLoop("ChatDB: No Privilege")
         else:
@@ -35,15 +71,7 @@ async def chat_db_init() -> None:
     except errors.RPCError as rpc:
         raise ForceStopLoop(f"ChatDB: {rpc.MESSAGE}")
 
-
 async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
-    """
-    Sends a message to the bot administrators.
-
-    Args:
-        msg_text (str): The message text to send.
-        only_owner (bool): If True, sends the message only to the bot owner. Defaults to False.
-    """
     bot_admins = helper_handlers.admins
     own_button = ikb(helper_buttons.Contact)
 
@@ -57,23 +85,10 @@ async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
         except errors.RPCError:
             continue
 
-
 async def send_restart_msg(chat_id: int, message_id: int, text: str) -> None:
-    """
-    Sends a restart message to a specific chat.
-
-    Args:
-        chat_id (int): The ID of the chat to send the message to.
-        message_id (int): The ID of the message to reply to.
-        text (str): The message text to send.
-    """
     await bot.send_message(chat_id, text, reply_to_message_id=message_id)
 
-
 async def cache_db_init() -> None:
-    """
-    Initializes various cache-related handlers.
-    """
     await asyncio.gather(
         helper_handlers.force_text_init(),
         helper_handlers.start_text_init(),
@@ -83,11 +98,7 @@ async def cache_db_init() -> None:
         helper_handlers.fs_chats_init(),
     )
 
-
 async def restart_data_init() -> None:
-    """
-    Handles the initialization process when the bot restarts, including sending messages and handling broadcast data.
-    """
     try:
         chat_id, message_id = await get_broadcast_data_ids()
         logger.info(f"BroadcastID: {chat_id}, {message_id}")
@@ -107,8 +118,10 @@ async def restart_data_init() -> None:
     except Exception as exc:
         logger.error(str(exc))
 
+# =========================
+# MAIN FUNCTION
+# =========================
 
-# Tambahkan dalam fungsi main()
 async def main() -> None:
     await bot.start()
     bot_user_id, bot_username = bot.me.id, bot.me.username
@@ -118,12 +131,15 @@ async def main() -> None:
     await cache_db_init()
     await restart_data_init()
 
-    # Start custom HTTP server in the same event loop
+    # Jalankan HTTP server tanpa menghentikan bot
     server = HTTPServer("0.0.0.0", 8000)
-    asyncio.create_task(server.run_server())  # INI BAGIAN PENTING
+    asyncio.create_task(server.run_server())
 
-    logger.info(f"@{bot_username} {bot_user_id}")
+    logger.info(f"Bot started as @{bot_username} ({bot_user_id})")
 
+# =========================
+# ENTRY POINT
+# =========================
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
@@ -140,44 +156,3 @@ if __name__ == "__main__":
         logger.info("Bot: Stopping...")
         loop.run_until_complete(bot.stop())
         loop.close()
-
-# ====== CUSTOM HTTP SERVER FOR HEALTH CHECK ======
-import logging
-
-class HTTPServer:
-    def __init__(self, host: str, port: int) -> None:
-        self.host = host
-        self.port = port
-        self.logger = logging.getLogger(__name__)
-
-    async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        try:
-            request = await reader.read(1024)
-            if not request:
-                return
-
-            self.logger.info("Received request: %s", request.decode().splitlines()[0])
-
-            path = request.decode().split(" ")[1]
-            if path == "/":
-                response = (
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/html\r\n\r\n"
-                    "<h1>Bot is Running</h1>"
-                )
-            else:
-                response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n<h1>404 Not Found</h1>"
-
-            writer.write(response.encode())
-            await writer.drain()
-        except ConnectionResetError:
-            self.logger.info("Connection lost")
-        finally:
-            writer.close()
-            await writer.wait_closed()
-
-    async def run_server(self) -> None:
-        server = await asyncio.start_server(self.handle_request, self.host, self.port)
-        self.logger.info(f"Serving HTTP health check on {self.host}:{self.port}")
-        async with server:
-            await server.serve_forever()
