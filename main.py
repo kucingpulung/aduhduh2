@@ -1,5 +1,5 @@
 import asyncio
-import os  # Untuk ambil port dari environment (misal Koyeb)
+import os
 from hydrogram import errors
 from hydrogram.helpers import ikb
 
@@ -15,8 +15,7 @@ from bot import (
     logger,
 )
 
-from http_server import HTTPServer  # Import class HTTPServer dari file baru
-
+from http_server import HTTPServer  # Import HTTP server
 
 async def chat_db_init() -> None:
     chat_id = config.DATABASE_CHAT_ID
@@ -29,7 +28,6 @@ async def chat_db_init() -> None:
     except errors.RPCError as rpc:
         raise ForceStopLoop(f"ChatDB: {rpc.MESSAGE}")
 
-
 async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
     bot_admins = helper_handlers.admins
     own_button = ikb(helper_buttons.Contact)
@@ -41,13 +39,15 @@ async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
     for admin in bot_admins:
         try:
             await bot.send_message(admin, msg_text, reply_markup=own_button)
-        except errors.RPCError:
-            continue
-
+            await asyncio.sleep(1.5)  # Anti-flood delay
+        except errors.RPCError as e:
+            logger.warning(f"Failed to message admin {admin}: {e}")
 
 async def send_restart_msg(chat_id: int, message_id: int, text: str) -> None:
-    await bot.send_message(chat_id, text, reply_to_message_id=message_id)
-
+    try:
+        await bot.send_message(chat_id, text, reply_to_message_id=message_id)
+    except errors.RPCError as e:
+        logger.warning(f"Failed to send restart message: {e}")
 
 async def cache_db_init() -> None:
     await asyncio.gather(
@@ -58,7 +58,6 @@ async def cache_db_init() -> None:
         helper_handlers.admins_init(),
         helper_handlers.fs_chats_init(),
     )
-
 
 async def restart_data_init() -> None:
     try:
@@ -78,8 +77,7 @@ async def restart_data_init() -> None:
         await send_msg_to_admins(task_msg, only_owner=True)
 
     except Exception as exc:
-        logger.error(str(exc))
-
+        logger.error(f"Restart Init Error: {exc}")
 
 async def main() -> None:
     await bot.start()
@@ -92,13 +90,12 @@ async def main() -> None:
 
     logger.info(f"@{bot_username} {bot_user_id}")
 
-    # Jalankan HTTP Server background
-    port = int(os.environ.get("PORT", 8000))
+    # HTTP server init (for Koyeb or health checks)
+    port = int(os.environ.get("PORT", 8080))
     http_server = HTTPServer("0.0.0.0", port)
-    asyncio.create_task(http_server.run_server())  # Non-blocking
+    asyncio.create_task(http_server.run_server())
 
     logger.info(f"HTTP server running on port {port}")
-
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
