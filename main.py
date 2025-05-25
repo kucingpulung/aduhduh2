@@ -123,6 +123,22 @@ async def main() -> None:
 
     logger.info(f"@{bot_username} {bot_user_id}")
     
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(main())
+        logger.info("Bot Activated!")
+        loop.run_forever()
+    except KeyboardInterrupt:
+        logger.info("KeyboardInterrupt: Terminating...")
+    except ForceStopLoop as fsl:
+        logger.error(str(fsl))
+    finally:
+        logger.info("Bot: Stopping...")
+        loop.run_until_complete(bot.stop())
+        loop.close()
+
 #======PING ULTIME ROBOT=====#
 from fastapi import FastAPI
 import threading
@@ -141,18 +157,3 @@ threading.Thread(target=run_ping_server, daemon=True).start()
 
 #======PING ULTIME ROBOT=====#
 
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(main())
-        logger.info("Bot Activated!")
-        loop.run_forever()
-    except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt: Terminating...")
-    except ForceStopLoop as fsl:
-        logger.error(str(fsl))
-    finally:
-        logger.info("Bot: Stopping...")
-        loop.run_until_complete(bot.stop())
-        loop.close()
