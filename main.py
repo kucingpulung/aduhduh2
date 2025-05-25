@@ -108,11 +108,8 @@ async def restart_data_init() -> None:
         logger.error(str(exc))
 
 
+# Tambahkan dalam fungsi main()
 async def main() -> None:
-    """
-    Main function to initialize and run the bot, including database setup, cache initialization,
-    and restart handling.
-    """
     await bot.start()
     bot_user_id, bot_username = bot.me.id, bot.me.username
 
@@ -120,6 +117,10 @@ async def main() -> None:
     await chat_db_init()
     await cache_db_init()
     await restart_data_init()
+
+    # Start custom HTTP server in the same event loop
+    server = HTTPServer("0.0.0.0", 8000)
+    asyncio.create_task(server.run_server())  # INI BAGIAN PENTING
 
     logger.info(f"@{bot_username} {bot_user_id}")
 
@@ -180,8 +181,3 @@ class HTTPServer:
         self.logger.info(f"Serving HTTP health check on {self.host}:{self.port}")
         async with server:
             await server.serve_forever()
-
-# Jalankan di thread terpisah setelah bot jalan
-def start_http_server():
-    server = HTTPServer("0.0.0.0", 8000)
-    asyncio.run(server.run_server())
