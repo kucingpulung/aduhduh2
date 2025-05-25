@@ -122,7 +122,24 @@ async def main() -> None:
     await restart_data_init()
 
     logger.info(f"@{bot_username} {bot_user_id}")
+    
+#======PING ULTIME ROBOT=====#
+from fastapi import FastAPI
+import threading
+import uvicorn
 
+app = FastAPI()
+
+@app.get("/")
+def ping():
+    return {"status": "Bot is running"}
+
+def run_ping_server():
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+
+threading.Thread(target=run_ping_server, daemon=True).start()
+
+#======PING ULTIME ROBOT=====#
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
