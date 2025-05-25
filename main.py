@@ -83,7 +83,7 @@ async def run_fastapi():
     server = uvicorn.Server(config)
     await server.serve()
 
-async def main():
+async def main() -> None:
     await bot.start()
     bot_user_id, bot_username = bot.me.id, bot.me.username
 
@@ -94,8 +94,12 @@ async def main():
 
     logger.info(f"@{bot_username} {bot_user_id}")
 
-    # Jalankan bot + FastAPI secara bersamaan
-    await run_fastapi()
+    # Jalanin FastAPI dan bot.listen barengan
+    await asyncio.gather(
+        run_fastapi(),
+        bot.idle(),  # Penting ini supaya bot tetap aktif nangkep event!
+    )
+
 
 if __name__ == "__main__":
     try:
