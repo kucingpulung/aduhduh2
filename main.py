@@ -1,5 +1,5 @@
 import asyncio
-import logging
+from aiohttp import web  # Tambahan untuk HTTP server
 
 from hydrogram import errors
 from hydrogram.helpers import ikb
@@ -16,49 +16,20 @@ from bot import (
     logger,
 )
 
-# =========================
-# HTTP SERVER UNTUK HEALTH CHECK
-# =========================
-class HTTPServer:
-    def __init__(self, host: str, port: int):
-        self.host = host
-        self.port = port
 
-    async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        try:
-            request = await reader.read(1024)
-            if not request:
-                return
+# Fungsi HTTP server untuk health check
+async def handle_health_check(request):
+    return web.Response(text="Bot is alive!")
 
-            path = request.decode().split(" ")[1]
-            if path == "/":
-                response = (
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/html\r\n\r\n"
-                    "<h1>Bot is running</h1>"
-                )
-            else:
-                response = (
-                    "HTTP/1.1 404 Not Found\r\n"
-                    "Content-Type: text/html\r\n\r\n"
-                    "<h1>404 Not Found</h1>"
-                )
+async def start_http_server():
+    app = web.Application()
+    app.router.add_get("/", handle_health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8080)  # Gunakan port 8080 untuk Koyeb
+    await site.start()
+    logger.info("HTTP server running on port 8080")
 
-            writer.write(response.encode())
-            await writer.drain()
-        finally:
-            writer.close()
-            await writer.wait_closed()
-
-    async def run_server(self):
-        server = await asyncio.start_server(self.handle_request, self.host, self.port)
-        logger.info(f"HTTP Server running at http://{self.host}:{self.port}")
-        async with server:
-            await server.serve_forever()
-
-# =========================
-# BOT INITIALIZATION
-# =========================
 
 async def chat_db_init() -> None:
     chat_id = config.DATABASE_CHAT_ID
@@ -70,6 +41,7 @@ async def chat_db_init() -> None:
             logger.info(f"ChatDB: {chat_id}")
     except errors.RPCError as rpc:
         raise ForceStopLoop(f"ChatDB: {rpc.MESSAGE}")
+
 
 async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
     bot_admins = helper_handlers.admins
@@ -85,8 +57,10 @@ async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
         except errors.RPCError:
             continue
 
+
 async def send_restart_msg(chat_id: int, message_id: int, text: str) -> None:
     await bot.send_message(chat_id, text, reply_to_message_id=message_id)
+
 
 async def cache_db_init() -> None:
     await asyncio.gather(
@@ -97,6 +71,7 @@ async def cache_db_init() -> None:
         helper_handlers.admins_init(),
         helper_handlers.fs_chats_init(),
     )
+
 
 async def restart_data_init() -> None:
     try:
@@ -118,9 +93,6 @@ async def restart_data_init() -> None:
     except Exception as exc:
         logger.error(str(exc))
 
-# =========================
-# MAIN FUNCTION
-# =========================
 
 async def main() -> None:
     await bot.start()
@@ -130,16 +102,10 @@ async def main() -> None:
     await chat_db_init()
     await cache_db_init()
     await restart_data_init()
+    await start_http_server()  # Start HTTP server for health check
 
-    # Jalankan HTTP server tanpa menghentikan bot
-    server = HTTPServer("0.0.0.0", 8000)
-    asyncio.create_task(server.run_server())
+    logger.info(f"@{bot_username} {bot_user_id}")
 
-    logger.info(f"Bot started as @{bot_username} ({bot_user_id})")
-
-# =========================
-# ENTRY POINT
-# =========================
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
