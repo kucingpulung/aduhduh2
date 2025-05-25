@@ -1,6 +1,5 @@
 import asyncio
-from aiohttp import web  # Tambahan untuk HTTP server
-
+import os  # Untuk ambil port dari environment (misal Koyeb)
 from hydrogram import errors
 from hydrogram.helpers import ikb
 
@@ -16,19 +15,7 @@ from bot import (
     logger,
 )
 
-
-# Fungsi HTTP server untuk health check
-async def handle_health_check(request):
-    return web.Response(text="Bot is alive!")
-
-async def start_http_server():
-    app = web.Application()
-    app.router.add_get("/", handle_health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Gunakan port 8080 untuk Koyeb
-    await site.start()
-    logger.info("HTTP server running on port 8000")
+from http_server import HTTPServer  # Import class HTTPServer dari file baru
 
 
 async def chat_db_init() -> None:
@@ -102,9 +89,15 @@ async def main() -> None:
     await chat_db_init()
     await cache_db_init()
     await restart_data_init()
-    await start_http_server()  # Start HTTP server for health check
 
     logger.info(f"@{bot_username} {bot_user_id}")
+
+    # Jalankan HTTP Server background
+    port = int(os.environ.get("PORT", 8000))
+    http_server = HTTPServer("0.0.0.0", port)
+    asyncio.create_task(http_server.run_server())  # Non-blocking
+
+    logger.info(f"HTTP server running on port {port}")
 
 
 if __name__ == "__main__":
