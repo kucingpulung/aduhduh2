@@ -140,21 +140,48 @@ if __name__ == "__main__":
         loop.run_until_complete(bot.stop())
         loop.close()
 
-# ====== FASTAPI FOR HEALTH CHECK ======
-import threading
-import uvicorn
-from fastapi import FastAPI
+# ====== CUSTOM HTTP SERVER FOR HEALTH CHECK ======
+import logging
 
-app = FastAPI()
+class HTTPServer:
+    def __init__(self, host: str, port: int) -> None:
+        self.host = host
+        self.port = port
+        self.logger = logging.getLogger(__name__)
 
-@app.get("/")
-def health_check():
-    return {"status": "Bot is running"}
+    async def handle_request(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        try:
+            request = await reader.read(1024)
+            if not request:
+                return
 
-def run_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+            self.logger.info("Received request: %s", request.decode().splitlines()[0])
 
-# Start FastAPI in a separate thread
-threading.Thread(target=run_fastapi, daemon=True).start()
-# ====== END FASTAPI SECTION ======
+            path = request.decode().split(" ")[1]
+            if path == "/":
+                response = (
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html\r\n\r\n"
+                    "<h1>Bot is Running</h1>"
+                )
+            else:
+                response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n<h1>404 Not Found</h1>"
 
+            writer.write(response.encode())
+            await writer.drain()
+        except ConnectionResetError:
+            self.logger.info("Connection lost")
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    async def run_server(self) -> None:
+        server = await asyncio.start_server(self.handle_request, self.host, self.port)
+        self.logger.info(f"Serving HTTP health check on {self.host}:{self.port}")
+        async with server:
+            await server.serve_forever()
+
+# Jalankan di thread terpisah setelah bot jalan
+def start_http_server():
+    server = HTTPServer("0.0.0.0", 8000)
+    asyncio.run(server.run_server())
