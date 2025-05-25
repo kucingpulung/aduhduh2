@@ -1,6 +1,4 @@
 import asyncio
-import uvicorn
-from fastapi import FastAPI
 
 from hydrogram import errors
 from hydrogram.helpers import ikb
@@ -17,16 +15,19 @@ from bot import (
     logger,
 )
 
-app = FastAPI()
 
-@app.get("/")
-def ping():
-    return {"status": "Bot is running"}
+async def chat_db_init() -> None:
+    """
+    Initializes the chat database by checking the bot's privileges in the configured chat.
 
-async def chat_db_init():
+    Raises:
+        ForceStopLoop: If the bot does not have the privilege to post messages in the chat.
+    """
     chat_id = config.DATABASE_CHAT_ID
     try:
+        # Get the bot's chat member status
         me = await bot.get_chat_member(chat_id, "me")
+        # Check if the bot has permission to post messages
         if not me.privileges.can_post_messages:
             raise ForceStopLoop("ChatDB: No Privilege")
         else:
@@ -34,22 +35,45 @@ async def chat_db_init():
     except errors.RPCError as rpc:
         raise ForceStopLoop(f"ChatDB: {rpc.MESSAGE}")
 
-async def send_msg_to_admins(msg_text: str, only_owner: bool = False):
+
+async def send_msg_to_admins(msg_text: str, only_owner: bool = False) -> None:
+    """
+    Sends a message to the bot administrators.
+
+    Args:
+        msg_text (str): The message text to send.
+        only_owner (bool): If True, sends the message only to the bot owner. Defaults to False.
+    """
     bot_admins = helper_handlers.admins
     own_button = ikb(helper_buttons.Contact)
+
     if only_owner:
         bot_admins = [config.OWNER_ID]
         own_button = None
+
     for admin in bot_admins:
         try:
             await bot.send_message(admin, msg_text, reply_markup=own_button)
         except errors.RPCError:
             continue
 
-async def send_restart_msg(chat_id: int, message_id: int, text: str):
+
+async def send_restart_msg(chat_id: int, message_id: int, text: str) -> None:
+    """
+    Sends a restart message to a specific chat.
+
+    Args:
+        chat_id (int): The ID of the chat to send the message to.
+        message_id (int): The ID of the message to reply to.
+        text (str): The message text to send.
+    """
     await bot.send_message(chat_id, text, reply_to_message_id=message_id)
 
-async def cache_db_init():
+
+async def cache_db_init() -> None:
+    """
+    Initializes various cache-related handlers.
+    """
     await asyncio.gather(
         helper_handlers.force_text_init(),
         helper_handlers.start_text_init(),
@@ -59,10 +83,15 @@ async def cache_db_init():
         helper_handlers.fs_chats_init(),
     )
 
-async def restart_data_init():
+
+async def restart_data_init() -> None:
+    """
+    Handles the initialization process when the bot restarts, including sending messages and handling broadcast data.
+    """
     try:
         chat_id, message_id = await get_broadcast_data_ids()
         logger.info(f"BroadcastID: {chat_id}, {message_id}")
+
         if chat_id and message_id:
             await send_restart_msg(chat_id, message_id, "<b>An Error Occurred!</b>")
             await del_broadcast_data_id()
@@ -78,12 +107,12 @@ async def restart_data_init():
     except Exception as exc:
         logger.error(str(exc))
 
-async def run_fastapi():
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
-    server = uvicorn.Server(config)
-    await server.serve()
 
 async def main() -> None:
+    """
+    Main function to initialize and run the bot, including database setup, cache initialization,
+    and restart handling.
+    """
     await bot.start()
     bot_user_id, bot_username = bot.me.id, bot.me.username
 
@@ -94,20 +123,38 @@ async def main() -> None:
 
     logger.info(f"@{bot_username} {bot_user_id}")
 
-    # Jalanin FastAPI dan bot.listen barengan
-    await asyncio.gather(
-        run_fastapi(),
-        bot.idle(),  # Penting ini supaya bot tetap aktif nangkep event!
-    )
-
 
 if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        asyncio.run(main())
+        loop.run_until_complete(main())
+        logger.info("Bot Activated!")
+        loop.run_forever()
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt: Terminating...")
     except ForceStopLoop as fsl:
         logger.error(str(fsl))
     finally:
         logger.info("Bot: Stopping...")
-        asyncio.run(bot.stop())
+        loop.run_until_complete(bot.stop())
+        loop.close()
+
+# ====== FASTAPI FOR HEALTH CHECK ======
+import threading
+import uvicorn
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def health_check():
+    return {"status": "Bot is running"}
+
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+
+# Start FastAPI in a separate thread
+threading.Thread(target=run_fastapi, daemon=True).start()
+# ====== END FASTAPI SECTION ======
+
