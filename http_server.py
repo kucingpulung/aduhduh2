@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-
 class HTTPServer:
     def __init__(self, host: str, port: int) -> None:
         self.host = host
@@ -14,29 +13,35 @@ class HTTPServer:
             if not request:
                 return
 
-            self.logger.info("HTTP request: %s", request.decode().splitlines()[0])
+            request_line = request.decode().splitlines()[0]
+            self.logger.info("HTTP Request: %s", request_line)
 
             path = request.decode().split(" ")[1]
             if path == "/":
                 response = (
                     "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/html\r\n"
+                    "Content-Type: text/plain\r\n"
                     "\r\n"
-                    "<html><head><title>Teleshare</title></head><body><h1>Teleshare</h1><p>Bot aktif dan sehat.</p></body></html>"
+                    "Bot is running!"
                 )
             else:
-                response = "HTTP/1.1 404 Not Found\r\n\r\n<h1>404 Not Found</h1>"
+                response = (
+                    "HTTP/1.1 404 Not Found\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "\r\n"
+                    "404 Not Found"
+                )
 
             writer.write(response.encode())
             await writer.drain()
-        except ConnectionResetError:
-            self.logger.info("Connection lost")
+        except Exception as e:
+            self.logger.error(f"HTTP error: {e}")
         finally:
             writer.close()
             await writer.wait_closed()
 
     async def run_server(self) -> None:
         server = await asyncio.start_server(self.handle_request, self.host, self.port)
-        self.logger.info("HTTPServer running on %s:%d", self.host, self.port)
+        self.logger.info("HTTP server listening on %s:%d", self.host, self.port)
         async with server:
             await server.serve_forever()
