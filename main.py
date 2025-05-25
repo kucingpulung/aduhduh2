@@ -26,9 +26,9 @@ async def start_http_server():
     app.router.add_get("/", handle_health_check)
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)  # Gunakan port 8080 untuk Koyeb
+    site = web.TCPSite(runner, "0.0.0.0", 8000)  # Gunakan port 8080 untuk Koyeb
     await site.start()
-    logger.info("HTTP server running on port 8080")
+    logger.info("HTTP server running on port 8000")
 
 
 async def chat_db_init() -> None:
