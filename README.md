@@ -6,3 +6,5 @@
   </a>
 </body>
 </html>
+
+[![Deploy to Koyeb](https://www.koyeb.com/deploy/button.svg)](https://www.koyeb.com/deploy?repo=https://github.com/AlekBaikHati/aduhduh/)
