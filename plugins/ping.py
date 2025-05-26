@@ -36,7 +36,7 @@ def get_full_uptime_block(latency: str) -> str:
     total_str = ", ".join(parts[:5])
 
     return (
-        "<blockquary>Info Bot<\blockquary>\n"
+        "Info Bot\n"
         f"Latency      : {latency}\n\n"
         f"Uptime Since : {since}\n"
         f"Uptime Total : {total_str}\n"
