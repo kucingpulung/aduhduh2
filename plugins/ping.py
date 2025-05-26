@@ -36,12 +36,13 @@ def get_full_uptime_block(latency: str) -> str:
     total_str = ", ".join(parts[:5])
 
     return (
-        "Info Bot\n"
-        f"Latency      : {latency}\n\n"
-        f"Uptime Since : {since}\n"
-        f"Uptime Total : {total_str}\n"
-        "\n"
+           f"𝙋𝙞𝙣𝙜 𝘽𝙤𝙩\n"
+           f"Latency      : {latency}\n\n"
+           f"𝗨𝗽𝘁𝗶𝗺𝗲 𝗕𝗼𝘁\n"
+           f"Uptime Since : {since}\n"
+           f"Uptime Total : {total_str}\n"
     )
+
 
 @Client.on_message(filters.private & filters.command("ping"))
 async def ping_handler(client: Client, message: Message) -> None:
