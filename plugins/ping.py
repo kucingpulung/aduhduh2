@@ -48,7 +48,7 @@ async def ping_handler(client: Client, message: Message) -> None:
         block = get_full_uptime_block().format(latency=latency)
         await message.reply_text(
             block,
-            parse_mode="markdown",   # lowercase
+            parse_mode="Markdown",   # lowercase
             quote=True,
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
@@ -57,7 +57,7 @@ async def ping_handler(client: Client, message: Message) -> None:
         logger.error(f"Ping/Uptime Error: {exc}")
         await message.reply_text(
             "```Error retrieving ping/uptime```",
-            parse_mode="markdown",
+            parse_mode="Markdown",
             quote=True
         )
 
@@ -66,14 +66,14 @@ async def ping_callback(client: Client, query: CallbackQuery) -> None:
     await query.answer()
     await query.message.edit_text(
         "```Refreshing…```",
-        parse_mode="markdown"
+        parse_mode="Markdown"
     )
     try:
         latency = await ping_function(client)
         block = get_full_uptime_block().format(latency=latency)
         await query.message.edit_text(
             block,
-            parse_mode="markdown",  # lowercase
+            parse_mode="Markdown",  # lowercase
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
         )
@@ -81,5 +81,5 @@ async def ping_callback(client: Client, query: CallbackQuery) -> None:
         logger.error(f"Ping/Uptime Callback Error: {exc}")
         await query.message.edit_text(
             "```Error retrieving ping/uptime```",
-            parse_mode="markdown"
+            parse_mode="Markdown"
         )
