@@ -8,15 +8,12 @@ from hydrogram.types import CallbackQuery, Message
 
 from bot import helper_buttons, logger
 
-# Catat waktu saat bot mulai
 startup_time = datetime.datetime.now()
-
 
 async def ping_function(client: Client) -> str:
     start = time.time()
     await client.invoke(functions.Ping(ping_id=0))
     return f"{(time.time() - start)*1000:.2f} ms"
-
 
 def get_full_uptime_block() -> str:
     now = datetime.datetime.now()
@@ -38,55 +35,51 @@ def get_full_uptime_block() -> str:
 
     return (
         "```"
+        f"Latency      : {{latency}}\n\n"
         f"Uptime Since : {since}\n"
         f"Uptime Total : {total_str}"
         "```"
     )
 
-
 @Client.on_message(filters.private & filters.command("ping"))
 async def ping_handler(client: Client, message: Message) -> None:
     try:
         latency = await ping_function(client)
-        uptime_block = get_full_uptime_block()
-        text = (
-            "```"
-            f"Latency      : {latency}\n\n"
-            f"{uptime_block.strip('```')}"
-            "```"
-        )
+        block = get_full_uptime_block().format(latency=latency)
         await message.reply_text(
-            text,
-            parse_mode="Markdown",
+            block,
+            parse_mode="markdown",   # lowercase
             quote=True,
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
         )
     except Exception as exc:
         logger.error(f"Ping/Uptime Error: {exc}")
-        await message.reply_text("```Error retrieving ping/uptime```", parse_mode="Markdown", quote=True)
-
+        await message.reply_text(
+            "```Error retrieving ping/uptime```",
+            parse_mode="markdown",
+            quote=True
+        )
 
 @Client.on_callback_query(filters.regex(r"\bping\b"))
 async def ping_callback(client: Client, query: CallbackQuery) -> None:
     await query.answer()
-    await query.message.edit_text("```Refreshing…```", parse_mode="Markdown")
+    await query.message.edit_text(
+        "```Refreshing…```",
+        parse_mode="markdown"
+    )
     try:
         latency = await ping_function(client)
-        uptime_block = get_full_uptime_block()
-        text = (
-            "```"
-            f"Latency      : {latency}\n\n"
-            f"{uptime_block.strip('```')}"
-            "```"
-        )
+        block = get_full_uptime_block().format(latency=latency)
         await query.message.edit_text(
-            text,
-            parse_mode="Markdown",
+            block,
+            parse_mode="markdown",  # lowercase
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
         )
     except Exception as exc:
         logger.error(f"Ping/Uptime Callback Error: {exc}")
-        await query.message.edit_text("```Error retrieving ping/uptime```", parse_mode="Markdown")
-
+        await query.message.edit_text(
+            "```Error retrieving ping/uptime```",
+            parse_mode="markdown"
+        )
