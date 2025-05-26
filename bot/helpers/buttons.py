@@ -72,9 +72,13 @@ class HelperButtons:
     Defines various inline button layouts for the bot.
     """
 
+    #Contact: List[List[Tuple[str, str, str]]] = [
+    #    [("Contact", f"https://t.me/{config.OWNER_USERNAME}/3", "url")]
+    #]
     Contact: List[List[Tuple[str, str, str]]] = [
-        [("Contact", f"https://t.me/{config.OWNER_USERNAME}/3", "url")]
+        [("Privacy Policy", "https://telegram.org/privacy-tpa", "url")]
     ]
+
     Close: List[List[Tuple[str, str]]] = [[("Close", "close")]]
     Broadcast: List[List[Tuple[str, str]]] = [[("Refresh", "broadcast")]]
     Ping: List[List[Tuple[str, str]]] = [[("Refresh", "ping")]]
