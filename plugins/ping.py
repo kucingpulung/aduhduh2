@@ -29,12 +29,12 @@ def get_full_uptime() -> str:
 
     since = startup_time.strftime("%B %d, %Y at %I:%M %p")
     parts = []
-    if weeks:   parts.append(f"{int(weeks)} Week{'s' if weeks>1 else ''}")
-    if days:    parts.append(f"{int(days)} Day{'s' if days>1 else ''}")
-    if hours:   parts.append(f"{int(hours)} Hour{'s' if hours>1 else ''}")
-    if minutes: parts.append(f"{int(minutes)} Minute{'s' if minutes>1 else ''}")
-    if seconds: parts.append(f"{int(seconds)} Second{'s' if seconds>1 else ''}")
-    total_str = ", ".join(parts[:3])  # maksimal 3 komponen
+    if weeks:   parts.append(f"{int(weeks)} Bulan{'s' if weeks>1 else ''}")
+    if days:    parts.append(f"{int(days)} Hari{'s' if days>1 else ''}")
+    if hours:   parts.append(f"{int(hours)} Jam{'s' if hours>1 else ''}")
+    if minutes: parts.append(f"{int(minutes)} Menit{'s' if minutes>1 else ''}")
+    if seconds: parts.append(f"{int(seconds)} Detik{'s' if seconds>1 else ''}")
+    total_str = ", ".join(parts[:5])  # maksimal 5 komponen
 
     # Bentuk teks HTML
     return (
@@ -57,7 +57,6 @@ async def ping_handler(client: Client, message: Message) -> None:
         )
         await message.reply_text(
             text,
-            parse_mode="HTML",
             quote=True,
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
@@ -82,7 +81,6 @@ async def ping_callback(client: Client, query: CallbackQuery) -> None:
         )
         await query.message.edit_text(
             text,
-            parse_mode="HTML",
             reply_markup=ikb(helper_buttons.Ping),
             disable_web_page_preview=True,
         )
