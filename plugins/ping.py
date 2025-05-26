@@ -36,11 +36,11 @@ def get_full_uptime_block(latency: str) -> str:
     total_str = ", ".join(parts[:5])
 
     return (
-        "```\n"
+        "<blockquary>Info Bot<\blockquary>\n"
         f"Latency      : {latency}\n\n"
         f"Uptime Since : {since}\n"
         f"Uptime Total : {total_str}\n"
-        "```"
+        "\n"
     )
 
 @Client.on_message(filters.private & filters.command("ping"))
@@ -57,7 +57,7 @@ async def ping_handler(client: Client, message: Message) -> None:
     except Exception as exc:
         logger.error(f"Ping/Uptime Error: {exc}")
         await message.reply_text(
-            "```\nError retrieving ping/uptime\n```",
+            "Error retrieving ping/uptime\n",
             quote=True
         )
 
@@ -65,7 +65,7 @@ async def ping_handler(client: Client, message: Message) -> None:
 async def ping_callback(client: Client, query: CallbackQuery) -> None:
     await query.answer()
     await query.message.edit_text(
-        "```\nRefreshing…\n```"
+        "Refreshing…\n"
     )
     try:
         latency = await ping_function(client)
@@ -78,5 +78,5 @@ async def ping_callback(client: Client, query: CallbackQuery) -> None:
     except Exception as exc:
         logger.error(f"Ping/Uptime Callback Error: {exc}")
         await query.message.edit_text(
-            "```\nError retrieving ping/uptime\n```"
+            "Error retrieving ping/uptime\n"
         )
