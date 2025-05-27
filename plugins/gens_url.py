@@ -113,10 +113,11 @@ async def generate_handler(client: Client, message: Message) -> None:
         konten_url = f"https://t.me/c/{str(konten_chat_id)[4:]}/{konten_msg.id}"
         db_url = f"https://t.me/c/{str(database_chat_id)[4:]}/{message_db.id}"
 
-        # === BALAS KE USER ===
+        # === BALAS KE USER DENGAN KETERANGAN SENDIRI ===
         await message.reply_text(
-            f'Here your link: {encoded_data_url}',
-            quote=True, 
+            f'Here is your link:\n<code>{encoded_data_url}</code>',
+            quote=True,
+            parse_mode=ParseMode.HTML,
             reply_markup=ikb([
                 [("Share", share_encoded_data_url, "url")],
                 [("Lihat Konten", konten_url, "url")],
