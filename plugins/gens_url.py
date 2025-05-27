@@ -34,13 +34,11 @@ async def generate_handler(client: Client, message: Message) -> None:
         await message.reply_text(
             encoded_data_url,
             quote=True,
-            reply_markup=ikb([[("Share", share_encoded_data_url, "url")]]),
-            disable_web_page_preview=True,
             reply_markup=ikb([
                 [("Share", share_encoded_data_url, "url")], 
                 [("Lihat DataBase", db_url, "url")]
             ]),
-    
+            disable_web_page_preview=True,
         )
     except Exception as exc:
         # Log the error and inform the user
