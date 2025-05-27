@@ -114,16 +114,16 @@ async def generate_handler(client: Client, message: Message) -> None:
         db_url = f"https://t.me/c/{str(database_chat_id)[4:]}/{message_db.id}"
 
         # === BALAS KE USER ===
-   await message.reply_text(
-       f'Here your link: \n {encoded_data_url}',
-       quote=True,
-       reply_markup=ikb([
-           [("Share", share_encoded_data_url, "url")],
-           [("Lihat Konten", konten_url, "url")],
-           [("Lihat DB", db_url, "url")]
-       ]),
-       disable_web_page_preview=True,
-   )
+        await message.reply_text(
+            f'Here your link: \n {encoded_data_url}',
+            quote=True,
+            reply_markup=ikb([
+                [("Share", share_encoded_data_url, "url")],
+                [("Lihat Konten", konten_url, "url")],
+                [("Lihat DB", db_url, "url")]
+                ]),
+            disable_web_page_preview=True,
+         )
 
 
     except Exception as exc:
