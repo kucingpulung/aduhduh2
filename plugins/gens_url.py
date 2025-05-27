@@ -1,6 +1,8 @@
 from hydrogram import Client, filters
 from hydrogram.helpers import ikb
 from hydrogram.types import Message
+from hydrogram.enums import ParseMode
+
 
 from bot import authorized_users_only, config, helper_handlers, logger, url_safe
 from plugins import list_available_commands
@@ -41,34 +43,34 @@ async def generate_handler(client: Client, message: Message) -> None:
                 konten_chat_id,
                 photo=message.photo.file_id,
                 caption=final_konten_caption,
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         elif message.document:
             konten_msg = await client.send_document(
                 konten_chat_id,
                 document=message.document.file_id,
                 caption=final_konten_caption,
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         elif message.video:
             konten_msg = await client.send_video(
                 konten_chat_id,
                 video=message.video.file_id,
                 caption=final_konten_caption,
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         elif message.audio:
             konten_msg = await client.send_audio(
                 konten_chat_id,
                 audio=message.audio.file_id,
                 caption=final_konten_caption,
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         elif message.text:
             konten_msg = await client.send_message(
                 konten_chat_id,
                 text=final_konten_caption,
-                parse_mode="HTML"
+                parse_mode=ParseMode.HTML
             )
         else:
             konten_msg = await message.copy(konten_chat_id)
@@ -81,7 +83,7 @@ async def generate_handler(client: Client, message: Message) -> None:
         await message.reply_text(
             final_db_caption,
             quote=True,
-            parse_mode="HTML",
+            parse_mode=ParseMode.HTML, 
             reply_markup=ikb([
                 [("Share", share_encoded_data_url, "url")],
                 [("Lihat Konten", konten_url, "url")],
