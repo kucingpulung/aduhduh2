@@ -9,18 +9,9 @@ from bot import authorized_users_only, config, logger, url_safe
 @authorized_users_only
 async def batch_handler(client: Client, message: Message) -> None:
     database_chat_id = config.DATABASE_CHAT_ID
+    database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"  # 🔥 PINDAH KE SINI
 
     async def ask_for_message_id(ask_msg: str) -> int:
-        """
-        Ask the user to forward a message from the Database Channel and return the message ID.
-
-        Args:
-            ask_msg (str): The prompt message to display to the user.
-
-        Returns:
-            int: The ID of the forwarded message, or None if invalid or not received.
-        """
-        database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         chat_id, user_id = message.chat.id, message.from_user.id
 
         try:
@@ -28,12 +19,12 @@ async def batch_handler(client: Client, message: Message) -> None:
                 chat_id=chat_id,
                 text=(
                     f"<b>{ask_msg}:</b>\n"
-                    f"Silakan teruskan pesan dari <a href='{database_ch_link}'>Database Channel</a>!\n\n"  # 🔥 CHANGE: pakai text link
+                    f"Silakan teruskan pesan dari <a href='{database_ch_link}'>Database Channel</a>!\n\n"
                     f"<b>Timeout:</b> 45 detik"
                 ),
                 user_id=user_id,
                 timeout=45,
-                reply_markup=ikb([[("📂 Buka Database Channel", database_ch_link, "url")]]),  # 🔥 CHANGE: tombol bawah
+                reply_markup=ikb([[("📂 Buka Database Channel", database_ch_link, "url")]]),
             )
         except errors.ListenerTimeout:
             await message.reply_text(
@@ -54,11 +45,11 @@ async def batch_handler(client: Client, message: Message) -> None:
         return ask_message.forward_from_message_id
 
     # Get the start and end message IDs
-    first_message_id = await ask_for_message_id("Awal")
+    first_message_id = await ask_for_message_id("Awal Pesan Batch")
     if first_message_id is None:
         return
 
-    last_message_id = await ask_for_message_id("Akhir")
+    last_message_id = await ask_for_message_id("Akhir Pesan Batch")
     if last_message_id is None:
         return
 
@@ -75,7 +66,7 @@ async def batch_handler(client: Client, message: Message) -> None:
             encoded_data_url,
             quote=True,
             reply_markup=ikb([
-                [("📂 Buka Database Channel", database_ch_link, "url")],  # 🔥 CHANGE: tombol bawah juga ada di sini
+                [("📂 Buka Database Channel", database_ch_link, "url")],
                 [("🔗 Bagikan", share_encoded_data_url, "url")]
             ]),
             disable_web_page_preview=True,
