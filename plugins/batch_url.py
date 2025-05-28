@@ -15,19 +15,19 @@ async def batch_handler(client: Client, message: Message) -> None:
         chat_id, user_id = message.chat.id, message.from_user.id
 
         timeout = 60  # 1 minute timeout
+        emojis = ["⏳", "⌛"]  # jam pasir penuh dan kosong
 
-        # Loading message (without button, so it's safe to edit)
+        # Initial loading message (no buttons)
         prompt_message = await message.reply_text(
             f"<b>{ask_msg}</b>\n⏳ [▓▓▓▓▓▓▓▓▓▓] {timeout}s\nForward a message from the Database Channel!"
         )
 
-        stop_event = asyncio.Event()
         countdown_task = asyncio.create_task(
-            countdown_timer(prompt_message, timeout, ask_msg, stop_event)
+            countdown_timer(prompt_message, timeout, ask_msg, emojis)
         )
 
         try:
-            # Separate prompt with button (this one doesn't get edited)
+            # Main prompt (with button)
             ask_message = await client.ask(
                 chat_id=chat_id,
                 text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
@@ -35,9 +35,9 @@ async def batch_handler(client: Client, message: Message) -> None:
                 timeout=timeout,
                 reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
             )
-            stop_event.set()  # stop countdown if user answers
+            countdown_task.cancel()
         except errors.ListenerTimeout:
-            stop_event.set()
+            countdown_task.cancel()
             await prompt_message.edit_text(
                 "<b>⏳ Time limit exceeded! Process has been cancelled.</b>"
             )
@@ -55,45 +55,29 @@ async def batch_handler(client: Client, message: Message) -> None:
 
         return ask_message.forward_from_message_id
 
-    async def countdown_timer(msg, total_seconds, ask_msg, stop_event):
+    async def countdown_timer(msg, total_seconds, ask_msg, emojis):
         bar_length = 10
-        last_text = ""
-        emojis = ["⏳", "⏱️", "⌛"]
-        emoji_index = 0
-
         for remaining in range(total_seconds, 0, -1):
-            if stop_event.is_set():
-                break
-
             filled_length = int(bar_length * remaining / total_seconds)
             bar = "▓" * filled_length + "░" * (bar_length - filled_length)
-            emoji = emojis[emoji_index % len(emojis)]
-            emoji_index += 1
-
-            new_text = (
-                f"<b>{ask_msg}</b>\n{emoji} [{bar}] {remaining}s\nForward a message from the Database Channel!"
-            )
-
-            if new_text != last_text:
-                try:
-                    await msg.edit_text(new_text)
-                    last_text = new_text
-                except Exception as e:
-                    logger.warning(f"Countdown edit failed: {e}")
-                    break
-
-            await asyncio.sleep(1)
-
-    # Get the start and end message IDs
-    first_message_id = await ask_for_message_id("Start")
-    if first_message_id is None:
-        return
-
-    last_message_id = await ask_for_message_id("End")
-    if last_message_id is None:
-        return
+            emoji = emojis[remaining % len(emojis)]  # bergantian ⏳ ⌛
+            try:
+                await msg.edit_text(
+                    f"<b>{ask_msg}</b>\n{emoji} [{bar}] {remaining}s\nForward a message from the Database Channel!"
+                )
+                await asyncio.sleep(1)
+            except Exception:
+                break  # stop if cancelled or fails
 
     try:
+        first_message_id = await ask_for_message_id("Start")
+        if first_message_id is None:
+            return
+
+        last_message_id = await ask_for_message_id("End")
+        if last_message_id is None:
+            return
+
         first_id = first_message_id * abs(database_chat_id)
         last_id = last_message_id * abs(database_chat_id)
         encoded_data = url_safe.encode_data(f"id-{first_id}-{last_id}")
