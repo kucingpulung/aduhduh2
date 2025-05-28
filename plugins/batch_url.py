@@ -1,3 +1,4 @@
+import asyncio
 from hydrogram import Client, errors, filters
 from hydrogram.helpers import ikb
 from hydrogram.types import Message
@@ -12,9 +13,6 @@ async def batch_handler(client: Client, message: Message) -> None:
     user_id = message.from_user.id
 
     async def ask_for_message_id(ask_msg: str) -> int:
-        """
-        Ask the user to forward a message from the Database Channel and return the message ID.
-        """
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         cancel_data = f"cancel_batch_{user_id}"
 
@@ -30,34 +28,40 @@ async def batch_handler(client: Client, message: Message) -> None:
                 ]),
             )
         except errors.ListenerTimeout:
-            await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
+            timeout_msg = await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
+            await asyncio.sleep(3)
+            await client.delete_messages(chat_id, timeout_msg.id)
             return None
 
-        # Check if user clicked cancel (via callback handler, see below)
         if ask_message.text == "CANCELLED":
-            await message.reply_text("<b>Proses batch telah dibatalkan oleh pengguna.</b>")
+            # Sudah di-handle di callback, tinggal return None
             return None
 
         if not ask_message.forward_from_chat or ask_message.forward_from_chat.id != database_chat_id:
-            await ask_message.reply_text(
+            error_msg = await ask_message.reply_text(
                 "<b>Pesan tidak valid! Harap teruskan pesan dari Database Channel.</b>",
                 quote=True,
             )
+            await asyncio.sleep(3)
+            await client.delete_messages(chat_id, [ask_message.id, error_msg.id])
             return None
 
+        # Sukses, hapus prompt setelah 3 detik
+        await asyncio.sleep(3)
+        await client.delete_messages(chat_id, ask_message.id)
         return ask_message.forward_from_message_id
 
-    # Ask for the first message
+    # Step 1: Pesan Pertama
     first_message_id = await ask_for_message_id("Pesan Pertama")
     if first_message_id is None:
         return
 
-    # Ask for the last message
+    # Step 2: Pesan Terakhir
     last_message_id = await ask_for_message_id("Pesan Terakhir")
     if last_message_id is None:
         return
 
-    # Encode data and generate link
+    # Generate encoded link
     try:
         first_id = first_message_id * abs(database_chat_id)
         last_id = last_message_id * abs(database_chat_id)
@@ -65,18 +69,24 @@ async def batch_handler(client: Client, message: Message) -> None:
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
         share_encoded_data_url = f"https://t.me/share?url={encoded_data_url}"
 
-        await message.reply_text(
+        link_msg = await message.reply_text(
             f"<b>Berikut link batch Anda:</b>\n\n{encoded_data_url}",
             quote=True,
             reply_markup=ikb([[("🔗 Share", share_encoded_data_url, "url")]]),
             disable_web_page_preview=True,
         )
+        # Opsional: hapus link setelah waktu tertentu kalau mau
+        # await asyncio.sleep(10)
+        # await client.delete_messages(chat_id, link_msg.id)
+
     except Exception as exc:
         logger.error(f"Batch: {exc}")
-        await message.reply_text("<b>Terjadi kesalahan saat membuat link batch!</b>", quote=True)
+        error_msg = await message.reply_text("<b>Terjadi kesalahan saat membuat link batch!</b>", quote=True)
+        await asyncio.sleep(3)
+        await client.delete_messages(chat_id, error_msg.id)
 
 
-# Callback handler for cancel button
+# Callback handler untuk tombol Cancel
 @Client.on_callback_query(filters.regex(r"^cancel_batch_\d+"))
 async def cancel_batch(client: Client, callback_query):
     user_id = int(callback_query.data.split("_")[-1])
@@ -87,7 +97,16 @@ async def cancel_batch(client: Client, callback_query):
 
     await callback_query.answer("❌ Proses dibatalkan.")
 
-    # Send a fake message back to the ask() waiter
+    # Edit pesan jadi notif batal
+    await client.edit_message_text(
+        chat_id=callback_query.message.chat.id,
+        message_id=callback_query.message.id,
+        text="❌ Proses telah dibatalkan oleh pengguna."
+    )
+    await asyncio.sleep(3)
+    await client.delete_messages(callback_query.message.chat.id, callback_query.message.id)
+
+    # Kirim pesan "CANCELLED" supaya ask() terpicu batal
     await client.send_message(
         chat_id=callback_query.message.chat.id,
         text="CANCELLED"
