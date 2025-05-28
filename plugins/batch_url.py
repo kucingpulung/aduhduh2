@@ -5,9 +5,9 @@ from hydrogram.types import Message, CallbackQuery
 
 from bot import authorized_users_only, config, logger, url_safe
 
-# Track prompt messages & cancel events
+# Track prompt messages & cancel flags
 active_prompts = {}
-cancel_events = {}
+active_cancels = {}
 
 @Client.on_message(filters.private & filters.command("batch"))
 @authorized_users_only
@@ -15,8 +15,8 @@ async def batch_handler(client: Client, message: Message) -> None:
     database_chat_id = config.DATABASE_CHAT_ID
     chat_id, user_id = message.chat.id, message.from_user.id
 
-    # Prepare cancel event
-    cancel_events[user_id] = asyncio.Event()
+    # Reset cancel flag
+    active_cancels[user_id] = False
 
     async def ask_for_message_id(step_name: str) -> int:
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
@@ -32,46 +32,28 @@ async def batch_handler(client: Client, message: Message) -> None:
         active_prompts[user_id] = prompt.id
 
         while True:
-            done, pending = await asyncio.wait(
-                [
-                    asyncio.create_task(client.listen(chat_id)),
-                    asyncio.create_task(cancel_events[user_id].wait())
-                ],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-
-            if cancel_events[user_id].is_set():
-                await client.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=prompt.id,
-                    text="❌ Proses telah dibatalkan oleh pengguna."
-                )
-                await asyncio.sleep(3)
+            if active_cancels.get(user_id):
                 await client.delete_messages(chat_id, prompt.id)
-                active_prompts.pop(user_id, None)
                 return None
 
-            for task in done:
-                user_msg = task.result()
-                if user_msg.from_user.id != user_id:
-                    continue
+            ask_message = await client.listen(chat_id)
 
-                if user_msg.forward_from_chat and user_msg.forward_from_chat.id == database_chat_id:
-                    await client.delete_messages(chat_id, prompt.id)
-                    active_prompts.pop(user_id, None)
-                    return user_msg.forward_from_message_id
-                else:
-                    warn_msg = await user_msg.reply_text("❗ Harap teruskan pesan dari Database Channel.")
-                    await asyncio.sleep(3)
-                    await client.delete_messages(chat_id, [warn_msg.id, user_msg.id])
+            if ask_message.from_user.id != user_id:
+                continue
+
+            if ask_message.forward_from_chat and ask_message.forward_from_chat.id == database_chat_id:
+                await client.delete_messages(chat_id, prompt.id)
+                return ask_message.forward_from_message_id
+            else:
+                warn_msg = await ask_message.reply_text("❗ Harap teruskan pesan dari Database Channel.")
+                await asyncio.sleep(3)
+                await client.delete_messages(chat_id, [warn_msg.id, ask_message.id])
 
     try:
-        # Step 1
         first_message_id = await ask_for_message_id("Pesan Pertama")
         if first_message_id is None:
             return
 
-        # Step 2
         last_message_id = await ask_for_message_id("Pesan Terakhir")
         if last_message_id is None:
             return
@@ -96,8 +78,8 @@ async def batch_handler(client: Client, message: Message) -> None:
         await client.delete_messages(chat_id, error_msg.id)
     finally:
         # Cleanup
-        cancel_events.pop(user_id, None)
         active_prompts.pop(user_id, None)
+        active_cancels.pop(user_id, None)
 
 @Client.on_callback_query(filters.regex(r"^cancel_batch_\d+"))
 async def cancel_batch(client: Client, callback_query: CallbackQuery):
@@ -109,21 +91,13 @@ async def cancel_batch(client: Client, callback_query: CallbackQuery):
 
     await callback_query.answer("❌ Proses dibatalkan.")
 
-    # Set cancel event
-    if user_id in cancel_events:
-        cancel_events[user_id].set()
+    # Set cancel flag
+    active_cancels[user_id] = True
 
     chat_id = callback_query.message.chat.id
 
     if user_id in active_prompts:
         try:
-            await client.edit_message_text(
-                chat_id=chat_id,
-                message_id=active_prompts[user_id],
-                text="❌ Proses telah dibatalkan oleh pengguna."
-            )
-            await asyncio.sleep(3)
             await client.delete_messages(chat_id, active_prompts[user_id])
         except Exception as e:
             logger.error(f"Error saat menghapus prompt: {e}")
-        active_prompts.pop(user_id, None)
