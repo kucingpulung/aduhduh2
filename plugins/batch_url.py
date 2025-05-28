@@ -14,13 +14,16 @@ async def batch_handler(client: Client, message: Message) -> None:
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         chat_id, user_id = message.chat.id, message.from_user.id
 
+        # Initial message with progress bar + button
         prompt_message = await message.reply_text(
             f"<b>{ask_msg}</b>\n⏳ [▓▓▓▓▓▓▓▓▓▓] 45s\nForward a message from the Database Channel!",
             reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
         )
 
         timeout = 45
-        countdown_task = asyncio.create_task(countdown_timer(prompt_message, timeout, ask_msg))
+        countdown_task = asyncio.create_task(
+            countdown_timer(prompt_message, timeout, ask_msg, database_ch_link)
+        )
 
         try:
             ask_message = await client.ask(
@@ -28,6 +31,7 @@ async def batch_handler(client: Client, message: Message) -> None:
                 text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
                 user_id=user_id,
                 timeout=timeout,
+                reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
             )
             countdown_task.cancel()  # stop countdown when user responds
         except errors.ListenerTimeout:
@@ -49,19 +53,21 @@ async def batch_handler(client: Client, message: Message) -> None:
 
         return ask_message.forward_from_message_id
 
-    async def countdown_timer(msg, total_seconds, ask_msg):
+    async def countdown_timer(msg, total_seconds, ask_msg, database_ch_link):
         bar_length = 10
         for remaining in range(total_seconds, 0, -1):
             filled_length = int(bar_length * remaining / total_seconds)
             bar = "▓" * filled_length + "░" * (bar_length - filled_length)
             try:
                 await msg.edit_text(
-                    f"<b>{ask_msg}</b>\n⏳ [{bar}] {remaining}s\nForward a message from the Database Channel!"
+                    f"<b>{ask_msg}</b>\n⏳ [{bar}] {remaining}s\nForward a message from the Database Channel!",
+                    reply_markup=ikb([[("Database Channel", database_ch_link, "url")]])
                 )
                 await asyncio.sleep(1)
             except Exception:
                 break  # stop if message edit fails or task is cancelled
 
+    # Get the start and end message IDs
     first_message_id = await ask_for_message_id("Start")
     if first_message_id is None:
         return
