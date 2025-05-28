@@ -1,69 +1,63 @@
 from hydrogram import Client, errors, filters
 from hydrogram.helpers import ikb
-from hydrogram.types import Message, CallbackQuery
+from hydrogram.types import Message
 
 from bot import authorized_users_only, config, logger, url_safe
-
-
-active_cancellations = set()
-
 
 @Client.on_message(filters.private & filters.command("batch"))
 @authorized_users_only
 async def batch_handler(client: Client, message: Message) -> None:
     database_chat_id = config.DATABASE_CHAT_ID
+    chat_id = message.chat.id
     user_id = message.from_user.id
 
     async def ask_for_message_id(ask_msg: str) -> int:
+        """
+        Ask the user to forward a message from the Database Channel and return the message ID.
+        """
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
-        chat_id = message.chat.id
-
-        prompt_message = await message.reply(
-            text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> 45s",
-            reply_markup=ikb([
-                [("Database Channel", database_ch_link, "url")],
-                [("❌ Cancel", f"cancel_batch_{user_id}")]
-            ]),
-        )
+        cancel_data = f"cancel_batch_{user_id}"
 
         try:
-            user_response = await client.ask(
+            ask_message = await client.ask(
                 chat_id=chat_id,
+                text=f"<b>{ask_msg}:</b>\nSilakan teruskan pesan dari Database Channel!\n\n<b>Timeout:</b> 45s",
                 user_id=user_id,
                 timeout=45,
+                reply_markup=ikb([
+                    [("📂 Database Channel", database_ch_link, "url")],
+                    [("❌ Cancel", f"callback:{cancel_data}")]
+                ]),
             )
         except errors.ListenerTimeout:
-            await prompt_message.edit_text("<b>⏰ Time limit exceeded! Process has been cancelled.</b>")
+            await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
             return None
 
-        # Check if cancelled
-        if user_id in active_cancellations:
-            active_cancellations.remove(user_id)
-            await prompt_message.edit_text("<b>❌ Process cancelled by user.</b>")
+        # Check if user clicked cancel (via callback handler, see below)
+        if ask_message.text == "CANCELLED":
+            await message.reply_text("<b>Proses batch telah dibatalkan oleh pengguna.</b>")
             return None
 
-        if (
-            not user_response.forward_from_chat
-            or user_response.forward_from_chat.id != database_chat_id
-        ):
-            await user_response.reply_text(
-                "<b>⚠ Invalid message! Please forward a message from the Database Channel.</b>",
+        if not ask_message.forward_from_chat or ask_message.forward_from_chat.id != database_chat_id:
+            await ask_message.reply_text(
+                "<b>Pesan tidak valid! Harap teruskan pesan dari Database Channel.</b>",
                 quote=True,
             )
             return None
 
-        return user_response.forward_from_message_id
+        return ask_message.forward_from_message_id
 
-    # Start batch process: ask for first and second message IDs
-    first_message_id = await ask_for_message_id("Start")
+    # Ask for the first message
+    first_message_id = await ask_for_message_id("Pesan Pertama")
     if first_message_id is None:
         return
 
-    last_message_id = await ask_for_message_id("End")
+    # Ask for the last message
+    last_message_id = await ask_for_message_id("Pesan Terakhir")
     if last_message_id is None:
         return
 
-    # Encode data
+    # Encode data and generate link
     try:
         first_id = first_message_id * abs(database_chat_id)
         last_id = last_message_id * abs(database_chat_id)
@@ -71,31 +65,30 @@ async def batch_handler(client: Client, message: Message) -> None:
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
         share_encoded_data_url = f"https://t.me/share?url={encoded_data_url}"
 
-        # Send the response
         await message.reply_text(
-            f"<b>Your batch link:</b>\n{encoded_data_url}",
+            f"<b>Berikut link batch Anda:</b>\n\n{encoded_data_url}",
             quote=True,
             reply_markup=ikb([[("🔗 Share", share_encoded_data_url, "url")]]),
             disable_web_page_preview=True,
         )
     except Exception as exc:
         logger.error(f"Batch: {exc}")
-        await message.reply_text("<b>❌ An Error Occurred!</b>", quote=True)
+        await message.reply_text("<b>Terjadi kesalahan saat membuat link batch!</b>", quote=True)
 
 
-# === CALLBACK HANDLER UNTUK CANCEL ===
-@Client.on_callback_query(filters.regex(r"cancel_batch_(\d+)"))
-async def cancel_batch_handler(client: Client, callback_query: CallbackQuery):
-    user_id = int(callback_query.matches[0].group(1))
+# Callback handler for cancel button
+@Client.on_callback_query(filters.regex(r"^cancel_batch_\d+"))
+async def cancel_batch(client: Client, callback_query):
+    user_id = int(callback_query.data.split("_")[-1])
 
-    # Mark user as cancelled
-    active_cancellations.add(user_id)
+    if callback_query.from_user.id != user_id:
+        await callback_query.answer("Bukan untukmu!", show_alert=True)
+        return
 
-    try:
-        await callback_query.message.edit_text("❌ Process cancelled by user.")
-        await callback_query.answer("Batch process cancelled.")
-        # Resolve listener to stop the ask wait
-        await client.resolve_listener(user_id, None)
-    except Exception as e:
-        logger.error(f"Cancel Callback Error: {e}")
-        await callback_query.answer("An error occurred cancelling the process.", show_alert=True)
+    await callback_query.answer("❌ Proses dibatalkan.")
+
+    # Send a fake message back to the ask() waiter
+    await client.send_message(
+        chat_id=callback_query.message.chat.id,
+        text="CANCELLED"
+    )
