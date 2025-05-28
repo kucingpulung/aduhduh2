@@ -12,7 +12,7 @@ async def batch_handler(client: Client, message: Message) -> None:
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    async def ask_for_message_id(ask_msg: str) -> int:
+    async def ask_for_message_id(ask_msg: str, prompt_messages: list) -> int:
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         cancel_data = f"cancel_batch_{user_id}"
 
@@ -27,6 +27,8 @@ async def batch_handler(client: Client, message: Message) -> None:
                     [("❌ Cancel", f"callback:{cancel_data}")]
                 ]),
             )
+            prompt_messages.append(ask_message.id)
+
         except errors.ListenerTimeout:
             timeout_msg = await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
             await asyncio.sleep(3)
@@ -34,7 +36,6 @@ async def batch_handler(client: Client, message: Message) -> None:
             return None
 
         if ask_message.text == "CANCELLED":
-            # Sudah di-handle di callback, tinggal return None
             return None
 
         if not ask_message.forward_from_chat or ask_message.forward_from_chat.id != database_chat_id:
@@ -42,22 +43,22 @@ async def batch_handler(client: Client, message: Message) -> None:
                 "<b>Pesan tidak valid! Harap teruskan pesan dari Database Channel.</b>",
                 quote=True,
             )
-            await asyncio.sleep(3)
             await client.delete_messages(chat_id, [ask_message.id, error_msg.id])
             return None
 
-        # Sukses, hapus prompt setelah 3 detik
-        await asyncio.sleep(3)
+        # Hapus prompt begitu berhasil
         await client.delete_messages(chat_id, ask_message.id)
         return ask_message.forward_from_message_id
 
+    prompt_messages = []
+
     # Step 1: Pesan Pertama
-    first_message_id = await ask_for_message_id("Pesan Pertama")
+    first_message_id = await ask_for_message_id("Pesan Pertama", prompt_messages)
     if first_message_id is None:
         return
 
     # Step 2: Pesan Terakhir
-    last_message_id = await ask_for_message_id("Pesan Terakhir")
+    last_message_id = await ask_for_message_id("Pesan Terakhir", prompt_messages)
     if last_message_id is None:
         return
 
@@ -69,15 +70,12 @@ async def batch_handler(client: Client, message: Message) -> None:
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
         share_encoded_data_url = f"https://t.me/share?url={encoded_data_url}"
 
-        link_msg = await message.reply_text(
+        await message.reply_text(
             f"<b>Berikut link batch Anda:</b>\n\n{encoded_data_url}",
             quote=True,
             reply_markup=ikb([[("🔗 Share", share_encoded_data_url, "url")]]),
             disable_web_page_preview=True,
         )
-        # Opsional: hapus link setelah waktu tertentu kalau mau
-        # await asyncio.sleep(10)
-        # await client.delete_messages(chat_id, link_msg.id)
 
     except Exception as exc:
         logger.error(f"Batch: {exc}")
