@@ -1,88 +1,92 @@
 import asyncio
-from hydrogram import Client, filters
-from hydrogram.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from hydrogram import Client, errors, filters
+from hydrogram.helpers import ikb
+from hydrogram.types import Message
 
 from bot import authorized_users_only, config, logger, url_safe
 
 @Client.on_message(filters.private & filters.command("batch"))
 @authorized_users_only
-async def batch_handler(client: Client, message: Message):
+async def batch_handler(client: Client, message: Message) -> None:
     database_chat_id = config.DATABASE_CHAT_ID
 
-    if str(database_chat_id).startswith("-100"):
-        db_channel_short_id = str(database_chat_id)[4:]
-    else:
-        logger.error(f"❗ DATABASE_CHAT_ID format salah: {database_chat_id}")
-        await message.reply_text("❗ Konfigurasi DATABASE_CHAT_ID salah. Hubungi admin.")
+    async def ask_for_message_id(ask_msg: str) -> int:
+        database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
+        chat_id, user_id = message.chat.id, message.from_user.id
+
+        prompt_message = await message.reply_text(
+            f"<b>{ask_msg}</b>\n⏳ [▓▓▓▓▓▓▓▓▓▓] 45s\nForward a message from the Database Channel!",
+            reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
+        )
+
+        timeout = 45
+        countdown_task = asyncio.create_task(countdown_timer(prompt_message, timeout, ask_msg))
+
+        try:
+            ask_message = await client.ask(
+                chat_id=chat_id,
+                text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
+                user_id=user_id,
+                timeout=timeout,
+            )
+            countdown_task.cancel()  # stop countdown when user responds
+        except errors.ListenerTimeout:
+            countdown_task.cancel()
+            await prompt_message.edit_text(
+                "<b>⏳ Time limit exceeded! Process has been cancelled.</b>"
+            )
+            return None
+
+        if (
+            not ask_message.forward_from_chat
+            or ask_message.forward_from_chat.id != database_chat_id
+        ):
+            await ask_message.reply_text(
+                "<b>Invalid message! Please forward a message from the Database Channel.</b>",
+                quote=True,
+            )
+            return None
+
+        return ask_message.forward_from_message_id
+
+    async def countdown_timer(msg, total_seconds, ask_msg):
+        bar_length = 10
+        for remaining in range(total_seconds, 0, -1):
+            filled_length = int(bar_length * remaining / total_seconds)
+            bar = "▓" * filled_length + "░" * (bar_length - filled_length)
+            try:
+                await msg.edit_text(
+                    f"<b>{ask_msg}</b>\n⏳ [{bar}] {remaining}s\nForward a message from the Database Channel!"
+                )
+                await asyncio.sleep(1)
+            except Exception:
+                break  # stop if message edit fails or task is cancelled
+
+    first_message_id = await ask_for_message_id("Start")
+    if first_message_id is None:
         return
 
-    database_channel_link = f"https://t.me/c/{db_channel_short_id}"
-    chat_id, user_id = message.chat.id, message.from_user.id
-
-    async def wait_for_forward(step_name: str):
-        prompt = await message.reply_text(
-            f"<b>{step_name}:</b>\nSilakan teruskan pesan dari <a href='{database_channel_link}'>Database Channel</a>!\n\nAtau tekan ❌ STOP untuk membatalkan.",
-            reply_markup=ReplyKeyboardMarkup([["❌ STOP"]], resize_keyboard=True)
-        )
-
-        while True:
-            try:
-                event = await asyncio.wait_for(client.listen(chat_id), timeout=120)
-            except asyncio.TimeoutError:
-                await prompt.edit_text("⏰ Waktu habis. Proses dibatalkan.")
-                return None
-
-            if isinstance(event, Message) and event.from_user.id == user_id:
-                text = (event.text or "").strip().upper()
-                if text in ["❌ STOP", "STOP"]:
-                    await prompt.edit_text("❌ Proses dibatalkan oleh pengguna.")
-                    await asyncio.sleep(2)
-                    await client.delete_messages(chat_id, [prompt.id, event.id])
-                    return None
-
-                if event.forward_from_chat and event.forward_from_chat.id == database_chat_id:
-                    await prompt.edit_text(f"✅ {step_name} diterima!")
-                    await asyncio.sleep(1)
-                    await client.delete_messages(chat_id, [prompt.id, event.id])
-                    return event.forward_from_message_id
-
-                warn = await event.reply_text("❗ Harap teruskan pesan dari Database Channel atau tekan ❌ STOP.")
-                await asyncio.sleep(2)
-                await client.delete_messages(chat_id, [warn.id, event.id])
+    last_message_id = await ask_for_message_id("End")
+    if last_message_id is None:
+        return
 
     try:
-        # Step 1: Pesan Pertama
-        logger.info("Menunggu pesan pertama...")
-        first_id = await wait_for_forward("Pesan Pertama")
-        if first_id is None:
-            logger.info("❌ Dibatalkan atau gagal di langkah pertama.")
-            await message.reply_text("❌ Proses batch dihentikan di langkah pertama.", reply_markup=ReplyKeyboardRemove())
-            return
-
-        # Step 2: Pesan Terakhir
-        logger.info("Menunggu pesan terakhir...")
-        last_id = await wait_for_forward("Pesan Terakhir")
-        if last_id is None:
-            logger.info("❌ Dibatalkan atau gagal di langkah kedua.")
-            await message.reply_text("❌ Proses batch dihentikan di langkah kedua.", reply_markup=ReplyKeyboardRemove())
-            return
-
-        # Encode data hanya kalau dua-duanya sukses
-        logger.info(f"✅ Pesan pertama ID: {first_id}, Pesan terakhir ID: {last_id}")
-        encoded_data = url_safe.encode_data(f"id-{first_id * abs(database_chat_id)}-{last_id * abs(database_chat_id)}")
+        first_id = first_message_id * abs(database_chat_id)
+        last_id = last_message_id * abs(database_chat_id)
+        encoded_data = url_safe.encode_data(f"id-{first_id}-{last_id}")
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
+        share_encoded_data_url = f"https://t.me/share?url={encoded_data_url}"
+        database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
 
         await message.reply_text(
-            f"<b>✅ Berikut link batch Anda:</b>\n\n{encoded_data_url}",
+            encoded_data_url,
+            quote=True,
+            reply_markup=ikb([
+                [("Database Channel", database_ch_link, "url")],
+                [("Share", share_encoded_data_url, "url")]
+            ]),
             disable_web_page_preview=True,
-            reply_markup=ReplyKeyboardRemove()
         )
-
-    except Exception as e:
-        logger.error(f"Batch error: {e}")
-        error_msg = await message.reply_text("<b>❗ Terjadi kesalahan saat membuat link batch!</b>")
-        await asyncio.sleep(3)
-        await client.delete_messages(chat_id, error_msg.id)
-
-    finally:
-        await client.send_message(chat_id, "✅ Selesai.", reply_markup=ReplyKeyboardRemove())
+    except Exception as exc:
+        logger.error(f"Batch: {exc}")
+        await message.reply_text("<b>An Error Occurred!</b>", quote=True)
