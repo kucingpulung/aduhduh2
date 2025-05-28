@@ -9,11 +9,10 @@ from bot import authorized_users_only, config, logger, url_safe
 async def batch_handler(client: Client, message: Message):
     database_chat_id = config.DATABASE_CHAT_ID
 
-    # Pastikan ID formatnya benar: ambil hanya angka belakang
     if str(database_chat_id).startswith("-100"):
         db_channel_short_id = str(database_chat_id)[4:]
     else:
-        logger.error(f"❗ DATABASE_CHAT_ID format tidak sesuai: {database_chat_id}")
+        logger.error(f"❗ DATABASE_CHAT_ID format salah: {database_chat_id}")
         await message.reply_text("❗ Konfigurasi DATABASE_CHAT_ID salah. Hubungi admin.")
         return
 
@@ -35,8 +34,8 @@ async def batch_handler(client: Client, message: Message):
 
             if isinstance(event, Message) and event.from_user.id == user_id:
                 text = (event.text or "").strip().upper()
-                if text == "❌ STOP" or text == "STOP":
-                    await prompt.edit_text("❌ Proses dibatalkan.")
+                if text in ["❌ STOP", "STOP"]:
+                    await prompt.edit_text("❌ Proses dibatalkan oleh pengguna.")
                     await asyncio.sleep(2)
                     await client.delete_messages(chat_id, [prompt.id, event.id])
                     return None
@@ -53,22 +52,26 @@ async def batch_handler(client: Client, message: Message):
 
     try:
         # Step 1: Pesan Pertama
+        logger.info("Menunggu pesan pertama...")
         first_id = await wait_for_forward("Pesan Pertama")
         if first_id is None:
-            await message.reply_text("❌ Proses batch dihentikan di langkah pertama.")
+            logger.info("❌ Dibatalkan atau gagal di langkah pertama.")
+            await message.reply_text("❌ Proses batch dihentikan di langkah pertama.", reply_markup=ReplyKeyboardRemove())
             return
 
         # Step 2: Pesan Terakhir
+        logger.info("Menunggu pesan terakhir...")
         last_id = await wait_for_forward("Pesan Terakhir")
         if last_id is None:
-            await message.reply_text("❌ Proses batch dihentikan di langkah kedua.")
+            logger.info("❌ Dibatalkan atau gagal di langkah kedua.")
+            await message.reply_text("❌ Proses batch dihentikan di langkah kedua.", reply_markup=ReplyKeyboardRemove())
             return
 
-        # Encode data
+        # Encode data hanya kalau dua-duanya sukses
+        logger.info(f"✅ Pesan pertama ID: {first_id}, Pesan terakhir ID: {last_id}")
         encoded_data = url_safe.encode_data(f"id-{first_id * abs(database_chat_id)}-{last_id * abs(database_chat_id)}")
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
 
-        # Kirim link batch
         await message.reply_text(
             f"<b>✅ Berikut link batch Anda:</b>\n\n{encoded_data_url}",
             disable_web_page_preview=True,
