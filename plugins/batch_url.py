@@ -20,22 +20,24 @@ async def batch_handler(client: Client, message: Message) -> None:
         Returns:
             int: The ID of the forwarded message, or None if invalid or not received.
         """
-        # Membuat link Database Channel yang bisa diklik
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         chat_id, user_id = message.chat.id, message.from_user.id
 
         try:
             ask_message = await client.ask(
                 chat_id=chat_id,
-                text=f"<b>{ask_msg}:</b>\nSilakan teruskan pesan dari <a href='{database_ch_link}'>Database Channel</a>!\n\n<b>Timeout:</b> 45s",
+                text=(
+                    f"<b>{ask_msg}:</b>\n"
+                    f"Silakan teruskan pesan dari <a href='{database_ch_link}'>Database Channel</a>!\n\n"  # 🔥 CHANGE: pakai text link
+                    f"<b>Timeout:</b> 45 detik"
+                ),
                 user_id=user_id,
                 timeout=45,
-                reply_markup=ikb([[("Buka Database Channel", database_ch_link, "url")]]),
-                disable_web_page_preview=True
+                reply_markup=ikb([[("📂 Buka Database Channel", database_ch_link, "url")]]),  # 🔥 CHANGE: tombol bawah
             )
         except errors.ListenerTimeout:
             await message.reply_text(
-                "<b>Waktu habis! Proses telah dibatalkan.</b>"
+                "<b>Batas waktu habis! Proses dibatalkan.</b>"
             )
             return None
 
@@ -51,13 +53,12 @@ async def batch_handler(client: Client, message: Message) -> None:
 
         return ask_message.forward_from_message_id
 
-    # Ambil ID pesan awal
-    first_message_id = await ask_for_message_id("Mulai Batch")
+    # Get the start and end message IDs
+    first_message_id = await ask_for_message_id("Awal")
     if first_message_id is None:
         return
 
-    # Ambil ID pesan akhir
-    last_message_id = await ask_for_message_id("Akhiri Batch")
+    last_message_id = await ask_for_message_id("Akhir")
     if last_message_id is None:
         return
 
@@ -69,12 +70,14 @@ async def batch_handler(client: Client, message: Message) -> None:
         encoded_data_url = f"https://t.me/{client.me.username}?start={encoded_data}"
         share_encoded_data_url = f"https://t.me/share?url={encoded_data_url}"
 
-        # Kirim pesan dengan link yang bisa dibagikan dan tombol
+        # Send the response
         await message.reply_text(
-            f"<b>Batch berhasil dibuat!</b>\nBerikut adalah link batch Anda:\n\n<code>{encoded_data_url}</code>",
+            encoded_data_url,
             quote=True,
-            reply_markup=ikb([[("Bagikan Link", share_encoded_data_url, "url"), 
-                               ("Buka Database Channel", database_ch_link, "url")]]),
+            reply_markup=ikb([
+                [("📂 Buka Database Channel", database_ch_link, "url")],  # 🔥 CHANGE: tombol bawah juga ada di sini
+                [("🔗 Bagikan", share_encoded_data_url, "url")]
+            ]),
             disable_web_page_preview=True,
         )
     except Exception as exc:
