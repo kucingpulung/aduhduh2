@@ -1,7 +1,6 @@
 import asyncio
 from hydrogram import Client, filters
-from hydrogram.helpers import reply_markup, reply_keyboard_remove
-from hydrogram.types import Message
+from hydrogram.types import Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 
 from bot import authorized_users_only, config, logger, url_safe
 
@@ -14,7 +13,7 @@ async def batch_handler(client: Client, message: Message):
     async def wait_for_forward(step_name: str):
         prompt = await message.reply_text(
             f"<b>{step_name}:</b>\nSilakan teruskan pesan dari Database Channel!\n\nAtau tekan ❌ STOP untuk membatalkan.",
-            reply_markup=reply_markup([["❌ STOP"]])
+            reply_markup=ReplyKeyboardMarkup([["❌ STOP"]], resize_keyboard=True)
         )
 
         while True:
@@ -52,7 +51,7 @@ async def batch_handler(client: Client, message: Message):
         await message.reply_text(
             f"<b>Berikut link batch Anda:</b>\n\n{encoded_data_url}",
             disable_web_page_preview=True,
-            reply_markup=reply_keyboard_remove()
+            reply_markup=ReplyKeyboardRemove()
         )
     except Exception as e:
         logger.error(f"Batch error: {e}")
@@ -60,5 +59,4 @@ async def batch_handler(client: Client, message: Message):
         await asyncio.sleep(3)
         await client.delete_messages(chat_id, error_msg.id)
     finally:
-        # always remove keyboard when done
-        await client.send_message(chat_id, "✅ Selesai.", reply_markup=reply_keyboard_remove())
+        await client.send_message(chat_id, "✅ Selesai.", reply_markup=ReplyKeyboardRemove())
