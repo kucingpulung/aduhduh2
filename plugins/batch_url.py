@@ -13,37 +13,31 @@ async def batch_handler(client: Client, message: Message) -> None:
     async def ask_for_message_id(ask_msg: str) -> int:
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         chat_id, user_id = message.chat.id, message.from_user.id
+
         timeout = 60  # 1 minute timeout
 
-        # Separate message for loading bar (no button, safe to edit)
+        # Loading message (without button, so it's safe to edit)
         prompt_message = await message.reply_text(
             f"<b>{ask_msg}</b>\n⏳ [▓▓▓▓▓▓▓▓▓▓] {timeout}s\nForward a message from the Database Channel!"
         )
 
-        # Create stop flag
         stop_event = asyncio.Event()
-
-        # Run countdown in background
         countdown_task = asyncio.create_task(
             countdown_timer(prompt_message, timeout, ask_msg, stop_event)
         )
 
         try:
-            # Actual prompt with button
-            ask_message = await asyncio.shield(
-                client.ask(
-                    chat_id=chat_id,
-                    text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
-                    user_id=user_id,
-                    timeout=timeout,
-                    reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
-                )
+            # Separate prompt with button (this one doesn't get edited)
+            ask_message = await client.ask(
+                chat_id=chat_id,
+                text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
+                user_id=user_id,
+                timeout=timeout,
+                reply_markup=ikb([[("Database Channel", database_ch_link, "url")]]),
             )
-            stop_event.set()  # stop countdown when answered
-            await countdown_task  # wait for it to finish cleanly
+            stop_event.set()  # stop countdown if user answers
         except errors.ListenerTimeout:
             stop_event.set()
-            await countdown_task
             await prompt_message.edit_text(
                 "<b>⏳ Time limit exceeded! Process has been cancelled.</b>"
             )
@@ -63,20 +57,30 @@ async def batch_handler(client: Client, message: Message) -> None:
 
     async def countdown_timer(msg, total_seconds, ask_msg, stop_event):
         bar_length = 10
+        last_text = ""
+        emojis = ["⏳", "⏱️", "⌛"]
+        emoji_index = 0
+
         for remaining in range(total_seconds, 0, -1):
             if stop_event.is_set():
                 break
 
             filled_length = int(bar_length * remaining / total_seconds)
             bar = "▓" * filled_length + "░" * (bar_length - filled_length)
+            emoji = emojis[emoji_index % len(emojis)]
+            emoji_index += 1
 
-            try:
-                await msg.edit_text(
-                    f"<b>{ask_msg}</b>\n⏳ [{bar}] {remaining}s\nForward a message from the Database Channel!"
-                )
-            except Exception as e:
-                logger.warning(f"Countdown edit failed: {e}")
-                break  # stop if edit fails
+            new_text = (
+                f"<b>{ask_msg}</b>\n{emoji} [{bar}] {remaining}s\nForward a message from the Database Channel!"
+            )
+
+            if new_text != last_text:
+                try:
+                    await msg.edit_text(new_text)
+                    last_text = new_text
+                except Exception as e:
+                    logger.warning(f"Countdown edit failed: {e}")
+                    break
 
             await asyncio.sleep(1)
 
