@@ -12,7 +12,11 @@ async def batch_handler(client: Client, message: Message) -> None:
     chat_id = message.chat.id
     user_id = message.from_user.id
 
-    async def ask_for_message_id(ask_msg: str, prompt_messages: list) -> int:
+    # Variable to track active prompt message (biar bisa dihapus saat cancel)
+    active_prompt_message_id = None
+
+    async def ask_for_message_id(ask_msg: str) -> int:
+        nonlocal active_prompt_message_id
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         cancel_data = f"cancel_batch_{user_id}"
 
@@ -27,7 +31,7 @@ async def batch_handler(client: Client, message: Message) -> None:
                     [("❌ Cancel", f"callback:{cancel_data}")]
                 ]),
             )
-            prompt_messages.append(ask_message.id)
+            active_prompt_message_id = ask_message.id
 
         except errors.ListenerTimeout:
             timeout_msg = await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
@@ -43,22 +47,22 @@ async def batch_handler(client: Client, message: Message) -> None:
                 "<b>Pesan tidak valid! Harap teruskan pesan dari Database Channel.</b>",
                 quote=True,
             )
+            await asyncio.sleep(3)
             await client.delete_messages(chat_id, [ask_message.id, error_msg.id])
             return None
 
         # Hapus prompt begitu berhasil
         await client.delete_messages(chat_id, ask_message.id)
+        active_prompt_message_id = None
         return ask_message.forward_from_message_id
 
-    prompt_messages = []
-
     # Step 1: Pesan Pertama
-    first_message_id = await ask_for_message_id("Pesan Pertama", prompt_messages)
+    first_message_id = await ask_for_message_id("Pesan Pertama")
     if first_message_id is None:
         return
 
     # Step 2: Pesan Terakhir
-    last_message_id = await ask_for_message_id("Pesan Terakhir", prompt_messages)
+    last_message_id = await ask_for_message_id("Pesan Terakhir")
     if last_message_id is None:
         return
 
@@ -93,9 +97,10 @@ async def cancel_batch(client: Client, callback_query):
         await callback_query.answer("Bukan untukmu!", show_alert=True)
         return
 
+    # Jawab cepat ke Telegram biar gak error timeout
     await callback_query.answer("❌ Proses dibatalkan.")
 
-    # Edit pesan jadi notif batal
+    # Edit pesan prompt menjadi notif batal
     await client.edit_message_text(
         chat_id=callback_query.message.chat.id,
         message_id=callback_query.message.id,
@@ -104,7 +109,7 @@ async def cancel_batch(client: Client, callback_query):
     await asyncio.sleep(3)
     await client.delete_messages(callback_query.message.chat.id, callback_query.message.id)
 
-    # Kirim pesan "CANCELLED" supaya ask() terpicu batal
+    # Kirim pesan "CANCELLED" supaya ask() detect dan berhenti
     await client.send_message(
         chat_id=callback_query.message.chat.id,
         text="CANCELLED"
