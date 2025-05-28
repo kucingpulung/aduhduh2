@@ -17,7 +17,7 @@ async def batch_handler(client: Client, message: Message) -> None:
         timeout = 60  # 1 minute timeout
         emojis = ["⏳", "⌛"]  # jam pasir penuh dan kosong
 
-        # Initial loading message (no buttons)
+        # Initial loading message
         prompt_message = await message.reply_text(
             f"<b>{ask_msg}</b>\n⏳ [▓▓▓▓▓▓▓▓▓▓] {timeout}s\nForward a message from the Database Channel!"
         )
@@ -27,7 +27,6 @@ async def batch_handler(client: Client, message: Message) -> None:
         )
 
         try:
-            # Main prompt (with button)
             ask_message = await client.ask(
                 chat_id=chat_id,
                 text=f"<b>{ask_msg}:</b>\nForward a message from the Database Channel!\n\n<b>Timeout:</b> {timeout}s",
@@ -60,13 +59,17 @@ async def batch_handler(client: Client, message: Message) -> None:
         for remaining in range(total_seconds, 0, -1):
             filled_length = int(bar_length * remaining / total_seconds)
             bar = "▓" * filled_length + "░" * (bar_length - filled_length)
-            emoji = emojis[remaining % len(emojis)]  # bergantian ⏳ ⌛
+            emoji = emojis[remaining % len(emojis)]  # ⏳ ⌛ bergantian
+            marker = "." * (remaining % 3 + 1)  # penanda kecil biar selalu beda
+
             try:
+                logger.info(f"Editing message: {remaining}s left, bar={bar}, emoji={emoji}")
                 await msg.edit_text(
-                    f"<b>{ask_msg}</b>\n{emoji} [{bar}] {remaining}s\nForward a message from the Database Channel!"
+                    f"<b>{ask_msg}</b>\n{emoji} [{bar}] {remaining}s {marker}\nForward a message from the Database Channel!"
                 )
                 await asyncio.sleep(1)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Countdown edit failed at {remaining}s: {e}")
                 break  # stop if cancelled or fails
 
     try:
