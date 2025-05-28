@@ -1,43 +1,54 @@
 import asyncio
 from hydrogram import Client, errors, filters
 from hydrogram.helpers import ikb
-from hydrogram.types import Message
+from hydrogram.types import Message, CallbackQuery
 
 from bot import authorized_users_only, config, logger, url_safe
+
+# Dictionary to track prompt messages per user
+active_prompts = {}
 
 @Client.on_message(filters.private & filters.command("batch"))
 @authorized_users_only
 async def batch_handler(client: Client, message: Message) -> None:
     database_chat_id = config.DATABASE_CHAT_ID
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-
-    # Variable to track active prompt message (biar bisa dihapus saat cancel)
-    active_prompt_message_id = None
+    chat_id, user_id = message.chat.id, message.from_user.id
 
     async def ask_for_message_id(ask_msg: str) -> int:
-        nonlocal active_prompt_message_id
         database_ch_link = f"tg://openmessage?chat_id={str(database_chat_id)[4:]}"
         cancel_data = f"cancel_batch_{user_id}"
+
+        prompt = await message.reply_text(
+            f"<b>{ask_msg}:</b>\nSilakan teruskan pesan dari Database Channel!",
+            reply_markup=ikb([
+                [("📂 Database Channel", database_ch_link, "url")],
+                [("❌ Cancel", f"callback:{cancel_data}")]
+            ])
+        )
+
+        # Track the active prompt message for this user
+        active_prompts[user_id] = prompt.id
 
         try:
             ask_message = await client.ask(
                 chat_id=chat_id,
-                text=f"<b>{ask_msg}:</b>\nSilakan teruskan pesan dari Database Channel!\n\n<b>Timeout:</b> 45s",
                 user_id=user_id,
-                timeout=45,
-                reply_markup=ikb([
-                    [("📂 Database Channel", database_ch_link, "url")],
-                    [("❌ Cancel", f"callback:{cancel_data}")]
-                ]),
+                timeout=45
             )
-            active_prompt_message_id = ask_message.id
-
         except errors.ListenerTimeout:
-            timeout_msg = await message.reply_text("<b>Waktu habis! Proses dibatalkan.</b>")
+            await client.edit_message_text(
+                chat_id=chat_id,
+                message_id=prompt.id,
+                text="⏰ Waktu habis! Proses dibatalkan."
+            )
             await asyncio.sleep(3)
-            await client.delete_messages(chat_id, timeout_msg.id)
+            await client.delete_messages(chat_id, prompt.id)
+            active_prompts.pop(user_id, None)
             return None
+
+        # Hapus prompt begitu selesai
+        await client.delete_messages(chat_id, prompt.id)
+        active_prompts.pop(user_id, None)
 
         if ask_message.text == "CANCELLED":
             return None
@@ -48,12 +59,9 @@ async def batch_handler(client: Client, message: Message) -> None:
                 quote=True,
             )
             await asyncio.sleep(3)
-            await client.delete_messages(chat_id, [ask_message.id, error_msg.id])
+            await client.delete_messages(chat_id, error_msg.id)
             return None
 
-        # Hapus prompt begitu berhasil
-        await client.delete_messages(chat_id, ask_message.id)
-        active_prompt_message_id = None
         return ask_message.forward_from_message_id
 
     # Step 1: Pesan Pertama
@@ -88,29 +96,34 @@ async def batch_handler(client: Client, message: Message) -> None:
         await client.delete_messages(chat_id, error_msg.id)
 
 
-# Callback handler untuk tombol Cancel
 @Client.on_callback_query(filters.regex(r"^cancel_batch_\d+"))
-async def cancel_batch(client: Client, callback_query):
+async def cancel_batch(client: Client, callback_query: CallbackQuery):
     user_id = int(callback_query.data.split("_")[-1])
 
     if callback_query.from_user.id != user_id:
         await callback_query.answer("Bukan untukmu!", show_alert=True)
         return
 
-    # Jawab cepat ke Telegram biar gak error timeout
     await callback_query.answer("❌ Proses dibatalkan.")
 
-    # Edit pesan prompt menjadi notif batal
-    await client.edit_message_text(
-        chat_id=callback_query.message.chat.id,
-        message_id=callback_query.message.id,
-        text="❌ Proses telah dibatalkan oleh pengguna."
-    )
-    await asyncio.sleep(3)
-    await client.delete_messages(callback_query.message.chat.id, callback_query.message.id)
+    chat_id = callback_query.message.chat.id
 
-    # Kirim pesan "CANCELLED" supaya ask() detect dan berhenti
+    # Edit prompt menjadi notif batal
+    if user_id in active_prompts:
+        try:
+            await client.edit_message_text(
+                chat_id=chat_id,
+                message_id=active_prompts[user_id],
+                text="❌ Proses telah dibatalkan oleh pengguna."
+            )
+            await asyncio.sleep(3)
+            await client.delete_messages(chat_id, active_prompts[user_id])
+        except Exception as e:
+            logger.error(f"Error saat menghapus prompt: {e}")
+        active_prompts.pop(user_id, None)
+
+    # Kirim pesan khusus supaya ask() detect cancel
     await client.send_message(
-        chat_id=callback_query.message.chat.id,
+        chat_id=chat_id,
         text="CANCELLED"
-    )
+        )
