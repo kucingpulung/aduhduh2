@@ -40,6 +40,7 @@ async def batch_handler(client: Client, message: Message):
         first_id = await wait_for_forward("Pesan Pertama")
         if first_id is None:
             return
+
         last_id = await wait_for_forward("Pesan Terakhir")
         if last_id is None:
             return
@@ -50,8 +51,8 @@ async def batch_handler(client: Client, message: Message):
 
         await message.reply_text(
             f"<b>Berikut link batch Anda:</b>\n\n{encoded_data_url}",
-            reply_markup=reply_keyboard_remove(),  # remove the keyboard
             disable_web_page_preview=True,
+            reply_markup=reply_keyboard_remove()
         )
     except Exception as e:
         logger.error(f"Batch error: {e}")
