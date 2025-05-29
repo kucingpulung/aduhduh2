@@ -11,6 +11,9 @@ from bot import (
     join_buttons,
 )
 
+# ===== Sponsor Section =====
+SPONSOR_PHOTO_URL = "https://i.ibb.co/QxgrVH3/sponsor.jpg"  # pakai direct image link
+SPONSOR_CAPTION = "ini sponsor"  # sementara caption uji coba
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start_handler(client: Client, message: Message) -> None:
@@ -36,6 +39,15 @@ async def start_handler(client: Client, message: Message) -> None:
                     await msg.copy(
                         user.id, protect_content=helper_handlers.protect_content
                     )
+
+            # ===== Send Sponsor After Files =====
+            if SPONSOR_PHOTO_URL and SPONSOR_CAPTION:
+                await client.send_photo(
+                    user.id,
+                    photo=SPONSOR_PHOTO_URL,
+                    caption=SPONSOR_CAPTION
+                )
+
         except errors.RPCError:
             pass
 
