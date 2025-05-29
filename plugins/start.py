@@ -1,6 +1,7 @@
-import json import os from hydrogram import Client, errors, filters from hydrogram.types import Message, User
-
-from bot import ( add_user, admin_buttons, config, helper_buttons, helper_handlers, join_buttons, )
+import json  
+import os  
+from hydrogram import Client, errors, filters  
+from hydrogram.types import Message, User
 
 SPONSOR_FILE = "sponsor.json"
 
