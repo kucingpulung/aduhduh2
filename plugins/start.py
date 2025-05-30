@@ -1,24 +1,20 @@
-import json
-import os
 from hydrogram import Client, errors, filters
+from hydrogram.helpers import ikb
 from hydrogram.types import Message, User
 
-SPONSOR_FILE = "sponsor.json"
+from bot import (
+    add_user,
+    admin_buttons,
+    config,
+    helper_buttons,
+    helper_handlers,
+    join_buttons,
+)
 
-def load_sponsor():
-    if os.path.exists(SPONSOR_FILE):
-        with open(SPONSOR_FILE, "r") as f:
-            data = json.load(f)
-        return data.get("message_id")
-    return None
+# Sponsor Settings
+text_sponsor = """🎉 Bot ini disponsori oleh <a href='https://www.megabank.com'>Mega Bank Anime</a>! 🌟 <b><a href='https://t.me/megabank_channel'>Klik di sini</a></b> untuk join!"""
+photo_sponsor = "0"  # isi "0" atau "" jika tidak ingin kirim foto
 
-def save_sponsor(message_id):
-    with open(SPONSOR_FILE, "w") as f:
-        json.dump({"message_id": message_id}, f)
-
-def clear_sponsor():
-    if os.path.exists(SPONSOR_FILE):
-        os.remove(SPONSOR_FILE)
 
 @Client.on_message(filters.private & filters.command("start"))
 async def start_handler(client: Client, message: Message) -> None:
@@ -31,6 +27,7 @@ async def start_handler(client: Client, message: Message) -> None:
     if len(message.command) == 1:
         buttons = admin_buttons() if user.id in helper_handlers.admins else user_buttons
         await message.reply_text(start_text, quote=True, reply_markup=buttons)
+
     else:
         force_text = format_text_message(helper_handlers.force_text, user)
         if await helper_handlers.user_is_not_join(user.id):
@@ -40,20 +37,32 @@ async def start_handler(client: Client, message: Message) -> None:
         try:
             message_ids = helper_handlers.decode_data(message.command[1])
             msgs = await client.get_messages(config.DATABASE_CHAT_ID, message_ids)
+
             for msg in msgs:
                 if not msg.empty:
-                    await msg.copy(user.id, protect_content=helper_handlers.protect_content)
+                    await msg.copy(
+                        user.id, protect_content=helper_handlers.protect_content
+                    )
 
-            sponsor_id = load_sponsor()
-            if sponsor_id:
-                try:
-                    sponsor_msg = await client.get_messages(config.DATABASE_CHAT_ID, sponsor_id)
-                    if sponsor_msg:
-                        await sponsor_msg.copy(user.id)
-                except errors.RPCError:
-                    pass
+            # ⬇️ Kirim sponsor setelah semua file dikirim
+            if text_sponsor:
+                if photo_sponsor and photo_sponsor != "0":
+                    await client.send_photo(
+                        chat_id=user.id,
+                        photo=photo_sponsor,
+                        caption=text_sponsor,
+                        parse_mode="HTML"
+                    )
+                else:
+                    await client.send_message(
+                        chat_id=user.id,
+                        text=text_sponsor,
+                        parse_mode="HTML"
+                    )
+
         except errors.RPCError:
             pass
+
 
 @Client.on_message(filters.private & filters.command("privacy"))
 async def privacy_handler(client: Client, message: Message) -> None:
@@ -68,14 +77,14 @@ This Privacy Policy explains how we collect, use, and protect your information w
 - We do not collect any personal information such as your name, email address, or phone number.
 
 <b>1.2 Usage Data</b>
-We may collect information about your interactions with the bot, such as messages sent, commands used, and the time and date of your interactions.</blockquote>
+- We may collect information about your interactions with the bot, such as messages sent, commands used, and the time and date of your interactions.</blockquote>
 
 <b>2. How We Use Your Information</b>
 <blockquote><b>2.1 To Operate the Bot</b>
 - The information collected is used to operate and improve the functionality of the bot.
 
 <b>2.2 To Improve Our Services</b>
-We may use the information to analyze how users interact with the bot in order to improve our services.</blockquote>
+- We may use the information to analyze how users interact with the bot in order to improve our services.</blockquote>
 
 <b>3. Data Security</b>
 <blockquote><b>3.1 Security Measures</b>
@@ -100,9 +109,11 @@ We may use the information to analyze how users interact with the bot in order t
 <b>Note:</b>
 <blockquote>- It's important to review this policy with a legal professional to ensure compliance with relevant laws and regulations.</blockquote>
 """
+
     await message.reply_text(
         privacy_policy, quote=True, reply_markup=ikb(helper_buttons.Contact)
     )
+
 
 def format_text_message(text: str, user: User) -> str:
     first_name, last_name = user.first_name, user.last_name
@@ -114,23 +125,3 @@ def format_text_message(text: str, user: User) -> str:
         full_name=full_name,
         mention=user.mention(full_name),
     )
-
-@Client.on_message(filters.private & filters.command("sponsor"))
-async def sponsor_handler(client: Client, message: Message) -> None:
-    user = message.from_user
-    if user.id not in helper_handlers.admins:
-        await message.reply_text("❌ Only admins can set sponsor messages.")
-        return
-
-    if len(message.command) == 1:
-        await message.reply_text("✅ Please reply to the sponsor message from the database channel and forward it here, or use /sponsor off to remove it.")
-    elif message.command[1].lower() == "off":
-        clear_sponsor()
-        await message.reply_text("✅ Sponsor message removed.")
-    elif message.reply_to_message:
-        sponsor_msg_id = message.reply_to_message.forward_from_message_id
-        if sponsor_msg_id:
-            save_sponsor(sponsor_msg_id)
-            await message.reply_text("✅ Sponsor message set.")
-        else:
-            await message.reply_text("❌ Please forward the sponsor message from the database channel.")
