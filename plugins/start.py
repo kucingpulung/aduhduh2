@@ -13,8 +13,8 @@ from bot import (
 )
 
 # Sponsor Settings
-text_sponsor = """🎉 Bot ini disponsori oleh <a href='https://www.megabank.com'>Mega Bank Anime</a>! 🌟 <b><a href='https://t.me/megabank_channel'>Klik di sini</a></b> untuk join!"""
-photo_sponsor = "https://ibb.co/KjFbm1Bk"  # Isi "0" atau "" jika tidak ingin kirim foto
+text_sponsor = config.SPONSOR_TEXT
+photo_sponsor = config.SPONSOR_PHOTO
 
 
 @Client.on_message(filters.private & filters.command("start"))
