@@ -12,7 +12,7 @@ from bot import (
     join_buttons,
 )
 
-# Sponsor Settings
+# Ambil nilai sponsor dari config
 text_sponsor = config.SPONSOR_TEXT
 photo_sponsor = config.SPONSOR_PHOTO
 
@@ -44,16 +44,24 @@ async def start_handler(client: Client, message: Message) -> None:
                         user.id, protect_content=helper_handlers.protect_content
                     )
 
-            # Kirim sponsor setelah semua file dikirim
-            if text_sponsor:
-                if photo_sponsor and photo_sponsor != "0":
+            # === Kirim sponsor (opsional) ===
+            text_valid = text_sponsor and text_sponsor != "0"
+            photo_valid = photo_sponsor and photo_sponsor != "0"
+
+            if text_valid or photo_valid:
+                if photo_valid and text_valid:
                     await client.send_photo(
                         chat_id=user.id,
                         photo=photo_sponsor,
                         caption=text_sponsor,
                         parse_mode=ParseMode.HTML
                     )
-                else:
+                elif photo_valid:
+                    await client.send_photo(
+                        chat_id=user.id,
+                        photo=photo_sponsor
+                    )
+                elif text_valid:
                     await client.send_message(
                         chat_id=user.id,
                         text=text_sponsor,
