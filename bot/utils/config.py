@@ -14,8 +14,8 @@ class Config:
         self.OWNER_USERNAME: str = os.environ.get("OWNER_USERNAME", "admin")
 
         # Optional setting
-        self.SPONSOR_TEXT: str = os.environ.get("SPONSOR_TEXT", "🎉 Bot ini disponsori oleh Anime Bahasa Indonesia!")
-        self.SPONSOR_PHOTO: str = os.environ.get("SPONSOR_PHOTO", "https://ibb.co/KjFbm1Bk")
+        self.SPONSOR_TEXT: str = os.environ.get("SPONSOR_TEXT", "").replace("\\n", "\n")
+        self.SPONSOR_PHOTO: str = os.environ.get("SPONSOR_PHOTO", "")
 
         self._validate()
 
