@@ -1,6 +1,7 @@
 from hydrogram import Client, errors, filters
 from hydrogram.helpers import ikb
-from hydrogram.types import Message, User, ModeSafeParseMode
+from hydrogram.types import Message, User
+from hydrogram.enums import ParseMode
 
 from bot import (
     add_user,
@@ -13,8 +14,7 @@ from bot import (
 
 # Sponsor Settings
 text_sponsor = """🎉 Bot ini disponsori oleh <a href='https://www.megabank.com'>Mega Bank Anime</a>! 🌟 <b><a href='https://t.me/megabank_channel'>Klik di sini</a></b> untuk join!"""
-#photo_sponsor = "https://telegra.ph/file/xxxxxxx.jpg"  # isi "0" atau "" jika tidak ingin kirim foto
-photo_sponsor = "0"  # isi "0" atau "" jika tidak ingin kirim foto
+photo_sponsor = "0"  # Isi "0" atau "" jika tidak ingin kirim foto
 
 
 @Client.on_message(filters.private & filters.command("start"))
@@ -28,7 +28,6 @@ async def start_handler(client: Client, message: Message) -> None:
     if len(message.command) == 1:
         buttons = admin_buttons() if user.id in helper_handlers.admins else user_buttons
         await message.reply_text(start_text, quote=True, reply_markup=buttons)
-
     else:
         force_text = format_text_message(helper_handlers.force_text, user)
         if await helper_handlers.user_is_not_join(user.id):
@@ -52,13 +51,13 @@ async def start_handler(client: Client, message: Message) -> None:
                         chat_id=user.id,
                         photo=photo_sponsor,
                         caption=text_sponsor,
-                        parse_mode=ModeSafeParseMode.HTML
+                        parse_mode=ParseMode.HTML
                     )
                 else:
                     await client.send_message(
                         chat_id=user.id,
                         text=text_sponsor,
-                        parse_mode=ModeSafeParseMode.HTML
+                        parse_mode=ParseMode.HTML
                     )
 
         except errors.RPCError:
